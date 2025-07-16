@@ -69,7 +69,10 @@ const BuckeyeScraper: React.FC = () => {
         setLastUpdate(data.data.last_update || null);
         const allMarkets = data.data.markets || [];
         allMarkets.sort((a: any, b: any) => parseFloat(b.ev) - parseFloat(a.ev));
-        setTopMarkets(allMarkets.length > 0 ? allMarkets.slice(0, 10) : []);
+        // Count positive EV markets
+        const positiveEVMarkets = allMarkets.filter((market: any) => parseFloat(market.ev) > 0);
+        const displayLimit = positiveEVMarkets.length > 10 ? 25 : 10;
+        setTopMarkets(allMarkets.length > 0 ? allMarkets.slice(0, displayLimit) : []);
       } else {
         setError(data.message || 'Failed to fetch results');
         setTopMarkets([]);
@@ -202,13 +205,19 @@ const BuckeyeScraper: React.FC = () => {
         setLastUpdate(data.last_update || null);
         const allMarkets = data.markets || [];
         allMarkets.sort((a: any, b: any) => parseFloat(b.ev) - parseFloat(a.ev));
-        setTopMarkets(allMarkets.length > 0 ? allMarkets.slice(0, 10) : []);
+        // Count positive EV markets
+        const positiveEVMarkets = allMarkets.filter((market: any) => parseFloat(market.ev) > 0);
+        const displayLimit = positiveEVMarkets.length > 10 ? 25 : 10;
+        setTopMarkets(allMarkets.length > 0 ? allMarkets.slice(0, displayLimit) : []);
         stopPolling(); // Stop polling when results are loaded
       } else if (data.status === 'partial_success') {
         setLastUpdate(data.last_update || null);
         const allMarkets = data.markets || [];
         allMarkets.sort((a: any, b: any) => parseFloat(b.ev) - parseFloat(a.ev));
-        setTopMarkets(allMarkets.length > 0 ? allMarkets.slice(0, 10) : []);
+        // Count positive EV markets
+        const positiveEVMarkets = allMarkets.filter((market: any) => parseFloat(market.ev) > 0);
+        const displayLimit = positiveEVMarkets.length > 10 ? 25 : 10;
+        setTopMarkets(allMarkets.length > 0 ? allMarkets.slice(0, displayLimit) : []);
         setMessage(data.message || 'Partial results loaded');
         stopPolling(); // Stop polling when results are loaded
       } else if (data.status === 'error') {
@@ -221,7 +230,10 @@ const BuckeyeScraper: React.FC = () => {
           setLastUpdate(data.data.last_update || null);
           const allMarkets = data.data.markets || [];
           allMarkets.sort((a: any, b: any) => parseFloat(b.ev) - parseFloat(a.ev));
-          setTopMarkets(allMarkets.length > 0 ? allMarkets.slice(0, 10) : []);
+          // Count positive EV markets
+          const positiveEVMarkets = allMarkets.filter((market: any) => parseFloat(market.ev) > 0);
+          const displayLimit = positiveEVMarkets.length > 10 ? 25 : 10;
+          setTopMarkets(allMarkets.length > 0 ? allMarkets.slice(0, displayLimit) : []);
           stopPolling(); // Stop polling when results are loaded
         } else {
           setError('Failed to fetch Ace results - unexpected response format');

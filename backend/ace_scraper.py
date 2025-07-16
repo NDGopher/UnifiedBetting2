@@ -116,14 +116,15 @@ class AceScraper:
         # Set up basic headers
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/plain, */*',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br, zstd',
+            'Accept-Encoding': 'gzip, deflate',  # Only allow gzip and deflate
             'Connection': 'keep-alive',
             'DNT': '1',
-            'Sec-Fetch-Dest': 'empty',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin'
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Upgrade-Insecure-Requests': '1'
         }
         self.session.headers.update(headers)
         
@@ -174,8 +175,18 @@ class AceScraper:
                 safe_print("[ACE DEBUG] Session validation failed - redirected to login")
                 return False
             
-            # If we get a 200 response, we're likely still logged in
+            # If we get a 200 response, check if it's actually a protected page
             if response.status_code == 200:
+                content = response.text.lower()
+                # If we get a login page, session is invalid
+                if ('<html' in content and 
+                    ('login.aspx' in content or 
+                     'action=\"./login' in content or 
+                     'name=\"account\"' in content or
+                     'name=\"password\"' in content)):
+                    safe_print("[ACE DEBUG] Session validation failed - got login page")
+                    return False
+                
                 safe_print("[ACE DEBUG] Session validation successful - got 200 response")
                 return True
             else:
@@ -187,34 +198,21 @@ class AceScraper:
             return False
     
     def login(self, username: str = "STEPHENFAR", password: str = "football") -> bool:
-        """Login to action23.ag using the correct workflow"""
+        """Login to action23.ag using the correct workflow (Buckeye-style robust)"""
         try:
             safe_print("[ACE DEBUG] Starting login process...")
-            
-            # Step 1: Get login page to extract form fields
             login_url = f"{self.base_url}/Login.aspx"
             safe_print(f"[ACE DEBUG] Fetching login page: {login_url}")
-            response = self.session.get(login_url, allow_redirects=False)
+            response = self.session.get(login_url, allow_redirects=True)
             response.raise_for_status()
-            
             safe_print(f"[ACE DEBUG] Login page response status: {response.status_code}")
             safe_print(f"[ACE DEBUG] Login page URL: {response.url}")
-            
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Log the form structure
             form = soup.find('form')
-            if form:
-                form_action = form.get('action', 'NO_ACTION')
-                form_method = form.get('method', 'NO_METHOD')
-                safe_print(f"[ACE DEBUG] Form action: {form_action}")
-                safe_print(f"[ACE DEBUG] Form method: {form_method}")
-            else:
+            if not form:
                 safe_print("[ACE DEBUG] No form found on login page!")
                 safe_print(f"[ACE DEBUG] Login page content preview: {response.text[:200]}")
                 return False
-            
-            # Log all form fields found
             all_inputs = soup.find_all('input')
             safe_print(f"[ACE DEBUG] Found {len(all_inputs)} input fields on login page:")
             for inp in all_inputs:
@@ -222,250 +220,101 @@ class AceScraper:
                 value = inp.get('value', 'NO_VALUE')
                 input_type = inp.get('type', 'NO_TYPE')
                 safe_print(f"[ACE DEBUG] Input: name='{name}', type='{input_type}', value='{value[:50]}...' if len(value) > 50 else value")
-            
-            # Extract ASP.NET form fields
             viewstate = soup.find('input', {'name': '__VIEWSTATE'})
             viewstate_generator = soup.find('input', {'name': '__VIEWSTATEGENERATOR'})
             event_validation = soup.find('input', {'name': '__EVENTVALIDATION'})
-            
-            # Prepare login data
             login_data = {
                 'Account': username,
                 'Password': password,
                 'BtnSubmit': 'Login'
             }
-            
-            # Add ASP.NET fields if they exist
             if viewstate:
                 login_data['__VIEWSTATE'] = viewstate.get('value', '')
                 safe_print(f"[ACE DEBUG] Added __VIEWSTATE: {viewstate.get('value', '')[:50]}...")
-            
             if viewstate_generator:
                 login_data['__VIEWSTATEGENERATOR'] = viewstate_generator.get('value', '')
                 safe_print(f"[ACE DEBUG] Added __VIEWSTATEGENERATOR: {viewstate_generator.get('value', '')[:50]}...")
-            
             if event_validation:
                 login_data['__EVENTVALIDATION'] = event_validation.get('value', '')
                 safe_print(f"[ACE DEBUG] Added __EVENTVALIDATION: {event_validation.get('value', '')[:50]}...")
-            
             safe_print(f"[ACE DEBUG] Login data prepared: {list(login_data.keys())}")
-            
-            # Step 2: Submit login form
-            safe_print("[ACE DEBUG] Submitting login form...")
-            login_response = self.session.post(login_url, data=login_data, allow_redirects=False)
+            # Buckeye-style: allow_redirects=True
+            safe_print("[ACE DEBUG] Submitting login form with allow_redirects=True...")
+            login_response = self.session.post(login_url, data=login_data, allow_redirects=True)
             safe_print(f"[ACE DEBUG] Login response status: {login_response.status_code}")
             safe_print(f"[ACE DEBUG] Login response URL: {login_response.url}")
             safe_print(f"[ACE DEBUG] Login response headers: {dict(login_response.headers)}")
-            
-            # Check for successful login (302 redirect is expected)
-            if login_response.status_code == 302:
-                location = login_response.headers.get('Location', '')
-                safe_print(f"[ACE DEBUG] Login redirect location: {location}")
-                
-                # Follow the redirect to complete login
-                if location:
-                    safe_print(f"[ACE DEBUG] Following redirect to: {location}")
-                    final_response = self.session.get(f"{self.base_url}{location}", allow_redirects=False)
-                    safe_print(f"[ACE DEBUG] Final response status: {final_response.status_code}")
-                    safe_print(f"[ACE DEBUG] Final response URL: {final_response.url}")
-                    
-                    # Check if we're now on a protected page
-                    if 'Welcome.aspx' in final_response.url or 'CreateSports.aspx' in final_response.url:
-                        safe_print("[ACE DEBUG] Login successful - reached protected page")
-                        self.logged_in = True
-                        return True
-                    else:
-                        safe_print("[ACE DEBUG] Login failed - not on protected page")
-                        return False
-                else:
-                    safe_print("[ACE DEBUG] Login failed - no redirect location")
-                    return False
+            # Check for login success: look for protected URLs and 'Logout' in response
+            if ("Welcome.aspx" in login_response.url or "CreateSports.aspx" in login_response.url) and \
+               ("Logout" in login_response.text or "logout" in login_response.text) and \
+               ("Invalid User" not in login_response.text):
+                safe_print("[ACE DEBUG] Login successful - reached protected page and found 'Logout' in response")
+                self.logged_in = True
+                return True
             else:
-                safe_print(f"[ACE DEBUG] Login failed - unexpected status code: {login_response.status_code}")
+                safe_print(f"[ACE DEBUG] Login failed. Status: {login_response.status_code}. URL: {login_response.url}")
                 safe_print(f"[ACE DEBUG] Login response content preview: {login_response.text[:200]}")
                 return False
-            
         except Exception as e:
             safe_print(f"[ACE DEBUG] Login failed: {e}")
             import traceback
             safe_print(f"[ACE DEBUG] Login traceback: {traceback.format_exc()}")
             return False
     
+    EXCLUDED_TERMS = [
+        "PRESIDENTIAL", "DEMOCRAT", "REPUBLICAN", "OSCARS", "NOBEL", "PERSON OF THE YEAR",
+        "WINNER", "BREEDERS", "F1", "NASCAR", "CYCLING", "OUTRIGHT", "TEAM TOTALS",
+        "1H", "SEASON TOTAL", "MATCHUPS",
+        # User additions:
+        "DARTS", "CRICKET", "SPECIALS", "SPECIAL", "REGULAR SEASON WINS", "MAKE THE PLAYOFFS",
+        "AWARD", "E-SPORTS", "FORMULA 1", "CALDER", "VEZINA", "HART", "GOLF", "WINS",
+        "QUARTERS", "POTENTIAL", "FUTURES", "RESULT", "PLAYER OF THE YEAR", "IMPROVED",
+        "DEFENSIVE", "MVP", "NORRIS", "RICHARD", "ADAMS",
+        # Additional exclusions to match Pinnacle scope:
+        "PROPS", "NHL TO MAKE PLAYOFFS", "WNCAA", "WOMEN'S", "LADIES'", "LADIES",
+        "EARLY GAME LINES", "STAGE OF ELIMINATION", "MOST RECEIVING YARDS", 
+        "MOST RUSHING YARDS", "MOST PASSING YARDS", "CHAMPIONSHIP GONE"
+    ]
     def _is_excluded_league_or_desc(self, text: str) -> bool:
-        """Return True if text matches any exclusion pattern."""
-        text = text.upper()
-        
-        for pat in self.exclusion_patterns:
-            if re.search(pat, text):
-                return True
-        
-        return False
+        return any(term in text.upper() for term in self.EXCLUDED_TERMS)
 
     def get_active_league_ids(self) -> str:
-        """Dynamically fetch active league IDs from Action23.ag and filter out props/futures"""
+        """Get active league IDs as a comma-separated string"""
+        league_ids = self._fetch_active_leagues()
+        league_ids_str = ','.join(league_ids)
+        safe_print(f"[ACE DEBUG] get_active_league_ids returning: {league_ids_str}")
+        return league_ids_str
+
+    def _fetch_active_leagues(self) -> List[str]:
+        """Fetch active leagues from Ace - use known working league IDs"""
         try:
-            safe_print("=" * 80)
-            safe_print("[ACE DEBUG] ===== STARTING ACTIVE LEAGUES FETCH =====")
-            safe_print(f"[ACE DEBUG] Base URL: {self.base_url}")
-            safe_print(f"[ACE DEBUG] Logged in status: {self.logged_in}")
-            try:
-                safe_print(f"[ACE DEBUG] Session cookies: {dict(self.session.cookies)}")
-            except Exception as e:
-                safe_print(f"[ACE DEBUG] Could not log cookies: {e}")
+            safe_print("[ACE DEBUG] Using known working league IDs...")
             
-            # Validate session before fetching
-            safe_print("[ACE DEBUG] Step 1: Validating session...")
-            session_valid = self._validate_session()
-            safe_print(f"[ACE DEBUG] Session validation result: {session_valid}")
+            # Use the exact league IDs from your working URL
+            # These are the league IDs that actually work based on your testing
+            working_league_ids = [
+                "2521", "515", "537", "1116", "3483", "1278", "439", "549", "451", "414",
+                "558", "4437", "557", "440", "585", "1183", "333", "1180", "546", "2948",
+                "1193", "1567", "520", "1241", "184", "2716", "482", "1195", "1189", "438",
+                "745", "1186", "306", "116", "1181", "521", "4781", "2777", "1190", "441",
+                "1196", "1162", "1569"
+            ]
             
-            if not session_valid:
-                safe_print("[ACE DEBUG] Session expired, attempting to re-login...")
-                login_success = self.login()
-                safe_print(f"[ACE DEBUG] Re-login result: {login_success}")
-                if not login_success:
-                    safe_print("[ACE DEBUG] Failed to re-login, aborting")
-                    return ""
-            
-            # Step 1: Navigate to CreateSports.aspx first (as per workflow)
-            safe_print("[ACE DEBUG] Step 1: Navigating to CreateSports.aspx...")
-            create_sports_url = f"{self.base_url}/wager/CreateSports.aspx?WT=0"
-            create_response = self.session.get(create_sports_url, allow_redirects=False)
-            safe_print(f"[ACE DEBUG] CreateSports response status: {create_response.status_code}")
-            safe_print(f"[ACE DEBUG] CreateSports response URL: {create_response.url}")
-            
-            # Check if we got redirected to login
-            if create_response.status_code == 302 and 'login' in create_response.headers.get('Location', '').lower():
-                safe_print("[ACE DEBUG] Got redirected to login from CreateSports.aspx")
-                return ""
-            
-            # Check if we got HTML login page
-            if '<html' in create_response.text.lower() and 'login' in create_response.text.lower():
-                safe_print("[ACE DEBUG] Got HTML login page from CreateSports.aspx")
-                return ""
-
-            # Step 2: Construct the correct leagues URL
-            leagues_url = f"{self.base_url}/wager/ActiveLeaguesHelper.aspx"
-            params = {'WT': '0'}
-            safe_print(f"[ACE DEBUG] Step 2: Fetching from URL: {leagues_url} with params: {params}")
-            safe_print(f"[ACE DEBUG] Request headers: {dict(self.session.headers)}")
-            try:
-                safe_print(f"[ACE DEBUG] Session cookies: {dict(self.session.cookies)}")
-            except Exception as e:
-                safe_print(f"[ACE DEBUG] Could not log cookies: {e}")
-
-            # Make the request
-            safe_print("[ACE DEBUG] Making HTTP request...")
-            response = self.session.get(leagues_url, params=params)
-            safe_print(f"[ACE DEBUG] Response status code: {response.status_code}")
-            safe_print(f"[ACE DEBUG] Response URL (after redirects): {response.url}")
-
-            # Check for errors
-            if response.status_code != 200:
-                safe_print(f"[ACE DEBUG] HTTP error: {response.status_code}")
-                safe_print(f"[ACE DEBUG] Response text: {response.text[:200]}")
-                return ""
-
-            # Check if response is HTML login page instead of JSON
-            response_text = response.text
-            safe_print(f"[ACE DEBUG] Response length: {len(response_text)} characters")
-            safe_print(f"[ACE DEBUG] Response starts with: {response_text[:200]}")
-
-            if '<html' in response_text.lower() or 'login' in response_text.lower():
-                safe_print("[ACE DEBUG] Received HTML login page, session expired or not authenticated!")
-                safe_print(f"[ACE DEBUG] HTML content preview: {response_text[:200]}")
-                return ""
-
-            safe_print(f"[ACE DEBUG] Final response status: {response.status_code}")
-            safe_print(f"[ACE DEBUG] Final response preview (first 200 chars): {response_text[:200]}")
-
-            safe_print("[ACE DEBUG] Step 3: Parsing JSON response...")
-            try:
-                data = response.json()
-                safe_print(f"[ACE DEBUG] JSON parsing successful")
-                safe_print(f"[ACE DEBUG] JSON structure keys: {list(data.keys())}")
-            except json.JSONDecodeError as e:
-                safe_print(f"[ACE DEBUG] JSON parsing failed: {e}")
-                try:
-                    safe_print(f"[ACE DEBUG] Raw response preview: {response_text[:200]}")
-                except UnicodeEncodeError:
-                    safe_print("[ACE DEBUG] Raw response contains Unicode characters that can't be logged")
-                return ""
-
-            result = data.get('result', [])
-            safe_print(f"[ACE DEBUG] Found 'result' key with {len(result)} items")
-            safe_print(f"[ACE DEBUG] Result type: {type(result)}")
-
-            if not result:
-                safe_print("[ACE DEBUG] No leagues found in response")
-                safe_print(f"[ACE DEBUG] Full data structure: {data}")
-                return ""
-
-            safe_print(f"[ACE DEBUG] Successfully parsed {len(result)} leagues from response")
-
-            safe_print("[ACE DEBUG] Step 4: Filtering leagues...")
-            safe_print(f"[ACE DEBUG] Total leagues to filter: {len(result)}")
-
-            # Filter leagues to exclude props/futures
-            filtered_league_ids = []
-            excluded_count = 0
-
-            safe_print("[ACE DEBUG] Starting league filtering process...")
-            for i, league in enumerate(result):
-                description = league.get('Description', '').upper()
-                index_name = league.get('IndexName', '').upper()
-                league_id = league.get('IdLeague')
-
-                # Only log first 5 leagues to avoid spam
-                if i < 5:
-                    safe_print(f"[ACE DEBUG] League {i+1}/{len(result)}: '{description}' (ID: {league_id})")
-
-                # Check exclusion patterns
-                desc_excluded = self._is_excluded_league_or_desc(description)
-                index_excluded = self._is_excluded_league_or_desc(index_name)
-
-                if desc_excluded or index_excluded:
-                    excluded_count += 1
-                    if i < 10:  # Only log first 10 exclusions
-                        safe_print(f"[ACE FILTER] EXCLUDED: {description}")
-                    continue
-
-                if league_id:
-                    filtered_league_ids.append(str(league_id))
-                    if i < 10:  # Only log first 10 inclusions
-                        safe_print(f"[ACE FILTER] INCLUDED: {description} (ID: {league_id})")
-                else:
-                    safe_print(f"[ACE DEBUG] League has no ID: {description}")
-
-            safe_print(f"[ACE DEBUG] Filtering complete: {len(filtered_league_ids)} included, {excluded_count} excluded")
-
-            safe_print(f"[ACE DEBUG] Filtered {len(filtered_league_ids)} game leagues from {len(result)} total (excluded {excluded_count})")
-
-            if not filtered_league_ids:
-                safe_print("[ACE DEBUG] ===== CRITICAL ERROR: NO LEAGUES PASSED FILTERING =====")
-                safe_print("[ACE DEBUG] This means the exclusion patterns are too aggressive.")
-                safe_print("[ACE DEBUG] All leagues were filtered out.")
-                safe_print("=" * 80)
-                return ""
-
-            league_ids_str = ','.join(filtered_league_ids)
-            safe_print(f"[ACE DEBUG] Final league IDs string: {league_ids_str}")
-            safe_print("[ACE DEBUG] ===== ACTIVE LEAGUES FETCH COMPLETE =====")
-            safe_print("=" * 80)
-            return league_ids_str
-        except requests.RequestException as e:
-            safe_print(f"[ACE DEBUG] Failed to fetch active leagues: {e}")
-            return ""
-        except json.JSONDecodeError as e:
-            safe_print(f"[ACE DEBUG] Failed to parse JSON response: {e}")
-            safe_print(f"[ACE DEBUG] Response preview: {response.text[:200]}")
-            return ""
-
+            safe_print(f"[ACE DEBUG] Using {len(working_league_ids)} known working league IDs")
+            return working_league_ids
+                
+        except Exception as e:
+            safe_print(f"[ACE DEBUG] Error with league IDs: {e}")
+            # Fallback to a broad range
+            safe_print("[ACE DEBUG] Using fallback league range 1-1000")
+            return [str(i) for i in range(1, 1001)]
+    
     def get_combined_league_ids(self) -> str:
         """Get combined league IDs - now uses dynamic active leagues"""
         return self.get_active_league_ids()
     
     def fetch_odds_data(self, league_ids: str = None) -> str:
-        """Fetch odds data from NewScheduleHelper.aspx with retry logic"""
+        """Fetch odds data from NewSchedule.aspx with retry logic"""
         max_retries = 3
         retry_delay = 2
         
@@ -493,20 +342,12 @@ class AceScraper:
                 safe_print(f"[ACE DEBUG] CreateSports response URL: {create_response.url}")
                 
                 # Check if we got redirected to login
-                if create_response.status_code == 302 and 'login' in create_response.headers.get('Location', '').lower():
-                    safe_print("[ACE DEBUG] Got redirected to login from CreateSports.aspx")
-                    if attempt < max_retries - 1:
-                        safe_print("[ACE DEBUG] Re-logging in and retrying...")
-                        if self.login():
-                            time.sleep(retry_delay)
-                            continue
-                        else:
-                            return ""
-                    else:
-                        return ""
-                
-                # Check if we got HTML login page
-                if '<html' in create_response.text.lower() and 'login' in create_response.text.lower():
+                create_content = create_response.text.lower()
+                if ('<html' in create_content and 
+                    ('login.aspx' in create_content or 
+                     'action=\"./login' in create_content or 
+                     'name=\"account\"' in create_content or
+                     'name=\"password\"' in create_content)):
                     safe_print("[ACE DEBUG] Got HTML login page from CreateSports.aspx")
                     if attempt < max_retries - 1:
                         safe_print("[ACE DEBUG] Re-logging in and retrying...")
@@ -517,21 +358,29 @@ class AceScraper:
                             return ""
                     else:
                         return ""
+                
+                # Step 1.5: Also try Welcome.aspx to establish session
+                safe_print("[ACE DEBUG] Step 1.5: Navigating to Welcome.aspx...")
+                welcome_url = f"{self.base_url}/wager/Welcome.aspx?login=1"
+                welcome_response = self.session.get(welcome_url, allow_redirects=False)
+                safe_print(f"[ACE DEBUG] Welcome response status: {welcome_response.status_code}")
+                safe_print(f"[ACE DEBUG] Welcome response URL: {welcome_response.url}")
 
-                # Step 2: Fetch odds data from correct URL
+                # Step 2: Fetch odds data from correct URL (NewScheduleHelper.aspx)
                 odds_url = f"{self.base_url}/wager/NewScheduleHelper.aspx"
                 params = {
                     'WT': '0',
                     'lg': league_ids
                 }
                 safe_print(f"[ACE DEBUG] Step 2: Fetching odds from: {odds_url} with params: {params} (attempt {attempt + 1}/{max_retries})")
+                safe_print(f"[ACE DEBUG] Final league IDs: {league_ids}")
                 
                 # Add better headers to look more like a real browser
                 headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
                     'Accept': 'application/json, text/plain, */*',
                     'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept-Encoding': 'gzip, deflate, br, zstd',
+                    'Accept-Encoding': 'gzip, deflate',  # Remove brotli to avoid compression issues
                     'Connection': 'keep-alive',
                     'DNT': '1',
                     'Sec-Fetch-Dest': 'empty',
@@ -564,15 +413,12 @@ class AceScraper:
                     try:
                         import gzip
                         import io
-                        # Use response.content (raw bytes) for decompression
                         decompressed_bytes = gzip.decompress(response.content)
                         content = decompressed_bytes.decode('utf-8', errors='ignore')
                         safe_print(f"[ACE DEBUG] Successfully decompressed {len(response.content)} bytes to {len(content)} characters")
                     except Exception as e:
                         safe_print(f"[ACE DEBUG] Failed to decompress gzip: {e}")
-                        safe_print(f"[ACE DEBUG] Trying alternative decompression...")
                         try:
-                            # Try using requests' built-in decompression
                             response.raw.decode_content = True
                             content = response.text
                             safe_print(f"[ACE DEBUG] Used requests built-in decompression: {len(content)} characters")
@@ -589,9 +435,30 @@ class AceScraper:
                     except Exception as e:
                         safe_print(f"[ACE DEBUG] Failed to decompress deflate: {e}")
                         content = response.text
+                elif content_encoding == 'zstd':
+                    safe_print("[ACE DEBUG] Response is zstd compressed, decompressing...")
+                    try:
+                        import zstandard
+                        dctx = zstandard.ZstdDecompressor()
+                        decompressed_bytes = dctx.decompress(response.content)
+                        content = decompressed_bytes.decode('utf-8', errors='ignore')
+                        safe_print(f"[ACE DEBUG] Successfully decompressed zstd: {len(content)} characters")
+                    except Exception as e:
+                        safe_print(f"[ACE DEBUG] Failed to decompress zstd: {e}")
+                        content = response.text
+                elif content_encoding == 'br':
+                    safe_print("[ACE DEBUG] Response is brotli compressed, decompressing...")
+                    try:
+                        import brotli
+                        decompressed_bytes = brotli.decompress(response.content)
+                        content = decompressed_bytes.decode('utf-8', errors='ignore')
+                        safe_print(f"[ACE DEBUG] Successfully decompressed brotli: {len(content)} characters")
+                    except Exception as e:
+                        safe_print(f"[ACE DEBUG] Failed to decompress brotli: {e}")
+                        content = response.text
                 else:
                     content = response.text
-                    safe_print(f"[ACE DEBUG] No compression detected, using response.text: {len(content)} characters")
+                    safe_print(f"[ACE DEBUG] No compression detected or unhandled, using response.text: {len(content)} characters")
                 
                 safe_print(f"[ACE DEBUG] Odds response length: {len(content)}")
 
@@ -643,9 +510,9 @@ class AceScraper:
                         safe_print("[ACE DEBUG] Response appears to be HTML")
                         # Save HTML response for debugging
                         try:
-                            with open(BASE_DIR / "data" / "last_html_response.txt", "w", encoding="utf-8") as f:
+                            with open(self.data_dir / "last_html_response.txt", "w", encoding="utf-8") as f:
                                 f.write(content)
-                            safe_print(f"[ACE DEBUG] Saved HTML response to {BASE_DIR / 'data' / 'last_html_response.txt'}")
+                            safe_print(f"[ACE DEBUG] Saved HTML response to {self.data_dir / 'last_html_response.txt'}")
                         except Exception as save_error:
                             safe_print(f"[ACE DEBUG] Could not save HTML response: {save_error}")
                     elif 'error' in content.lower():
@@ -735,11 +602,21 @@ class AceScraper:
             # Check if response is actually JSON
             if not json_content.strip().startswith('{') and not json_content.strip().startswith('['):
                 safe_print("[ACE DEBUG] Response is not JSON - likely HTML or error page")
+                safe_print(f"[ACE DEBUG] Response starts with: {json_content[:100]}")
+                
+                # Check if it's an HTML error page
+                if '<html' in json_content.lower():
+                    safe_print("[ACE DEBUG] Response is HTML - likely login page or error")
+                    if 'login' in json_content.lower():
+                        safe_print("[ACE DEBUG] HTML contains 'login' - session may have expired")
+                    elif 'error' in json_content.lower():
+                        safe_print("[ACE DEBUG] HTML contains 'error' - server error page")
+                
                 # Save the response for debugging
                 try:
-                    with open(BASE_DIR / "data" / "last_bad_response.txt", "w", encoding="utf-8") as f:
+                    with open(self.data_dir / "last_bad_response.txt", "w", encoding="utf-8") as f:
                         f.write(json_content)
-                    safe_print(f"[ACE DEBUG] Saved non-JSON response to {BASE_DIR / 'data' / 'last_bad_response.txt'}")
+                    safe_print(f"[ACE DEBUG] Saved non-JSON response to {self.data_dir / 'last_bad_response.txt'}")
                 except Exception as save_error:
                     safe_print(f"[ACE DEBUG] Could not save response: {save_error}")
                 return []
@@ -785,9 +662,9 @@ class AceScraper:
             safe_print(f"[ACE DEBUG] JSON decode error: {e}")
             # Save the problematic response for debugging
             try:
-                with open(BASE_DIR / "data" / "last_json_error.txt", "w", encoding="utf-8") as f:
+                with open(self.data_dir / "last_json_error.txt", "w", encoding="utf-8") as f:
                     f.write(json_content)
-                safe_print(f"[ACE DEBUG] Saved problematic response to {BASE_DIR / 'data' / 'last_json_error.txt'}")
+                safe_print(f"[ACE DEBUG] Saved problematic response to {self.data_dir / 'last_json_error.txt'}")
             except Exception as save_error:
                 safe_print(f"[ACE DEBUG] Could not save response: {save_error}")
             return []
@@ -1113,10 +990,9 @@ class AceScraper:
         try:
             # Check if we're still logged in by making a test request
             safe_print("[ACE DEBUG] Checking session validity...")
-            test_response = self.session.get(f"{self.base_url}/wager/CreateSports.aspx?WT=0")
             
-            # If we get redirected to login page, session has expired
-            if "Please sign in" in test_response.text or test_response.status_code == 302:
+            # Use the proper session validation method
+            if not self._validate_session():
                 safe_print("[ACE DEBUG] Session expired, re-logging in...")
                 if not self.login():
                     safe_print("[ACE DEBUG] Failed to re-login")
@@ -1132,6 +1008,7 @@ class AceScraper:
             if not league_ids:
                 safe_print("[ACE DEBUG] No league IDs provided, getting combined league IDs...")
                 league_ids = self.get_combined_league_ids()
+            safe_print(f"[ACE DEBUG] scrape_games using league IDs: {league_ids}")
             
             if not league_ids:
                 safe_print("[ACE DEBUG] No valid leagues to scrape, aborting.")
@@ -1193,48 +1070,21 @@ class AceScraper:
             # Combine all text for checking
             all_text = f"{away_team} {home_team} {league} {description}".upper()
             
-            # Check for exclusion patterns
+            # Only use exclusion_patterns (regex) for props/futures/esports
             for pattern in self.exclusion_patterns:
                 if re.search(pattern, all_text, re.IGNORECASE):
                     safe_print(f"[ACE GAME FILTER] Excluded game due to pattern '{pattern}': {away_team} vs {home_team}")
                     return False
             
-            # Additional specific checks
-            exclusion_terms = [
-                # Esports
-                'ESPORTS', 'ESPORT', 'LOL', 'LEAGUE OF LEGENDS', 'CS2', 'COUNTER STRIKE', 'DOTA', 'VALORANT',
-                'ROCKET LEAGUE', 'FIFA', 'FORTNITE', 'PUBG', 'OVERWATCH', 'STARCRAFT', 'WARCRAFT',
-                
-                # Props and futures
-                'MAKE PLAYOFFS', 'YES MAKE PLAYOFFS', 'NO MAKE PLAYOFFS', 'TO WIN', 'TO ADVANCE',
-                'PLAYER PROP', 'TEAM PROP', 'SEASON FUTURE', 'AWARD', 'MVP', 'ROOKIE',
-                
-                # Periods and halves
-                '1ST HALF', '2ND HALF', 'HALF TIME', '1H', '2H', 'Q1', 'Q2', 'Q3', 'Q4',
-                'QUARTER', 'PERIOD', 'OT', 'OVERTIME', 'EXTRA TIME',
-                
-                # Tennis
-                'SET', '1ST SET', '2ND SET', '3RD SET', '4TH SET', '5TH SET',
-                
-                # Baseball props
-                'HITS+RUNS+ERRORS', 'H+R+E', 'HRE', 'PITCHER', 'BATTER', 'STRIKEOUT',
-                'HOME RUN', 'RBI', 'ERA', 'WHIP', 'SAVE', 'HOLD',
-                
-                # Boxing/MMA
-                'FIGHT', 'MATCH', 'BOUT', 'KNOCKOUT', 'KO', 'TKO', 'DECISION',
-                'SUBMISSION', 'CHOKE', 'ARM BAR', 'LEG LOCK',
-                
-                # Golf
-                'HOLE', 'ROUND', 'BOGEY', 'PAR', 'BIRDIE', 'EAGLE', 'PUTT', 'DRIVE',
-                
-                # Common prop indicators
-                'TOTAL', 'OVER', 'UNDER', 'SPREAD', 'MONEYLINE', 'ODDS',
-                'YES', 'NO', 'WIN', 'LOSE', 'LOSS', 'DRAW', 'TIE'
+            # Exclude futures, championships, and season-long bets
+            futures_keywords = [
+                'CHAMPIONSHIP WINNER', 'WORLD SERIES WINNER', 'STANLEY CUP WINNER', 
+                'REGULAR SEASON WINS', 'DIVISION WINNER', 'CONFERENCE WINNER',
+                'COIN TOSS', 'SUPER BOWL', 'RSW', 'SEASON WINS'
             ]
-            
-            for term in exclusion_terms:
-                if term in all_text:
-                    safe_print(f"[ACE GAME FILTER] Excluded game due to term '{term}': {away_team} vs {home_team}")
+            for keyword in futures_keywords:
+                if keyword in all_text:
+                    safe_print(f"[ACE GAME FILTER] Excluded futures/championship: {away_team} vs {home_team} (contains '{keyword}')")
                     return False
             
             # Check for valid team names (must have at least 2 characters)
@@ -1246,41 +1096,28 @@ class AceScraper:
             game_date = game.get('date_time')
             if game_date:
                 try:
-                    # Parse the date and check if it's within next 7 days
                     from datetime import datetime, timedelta
-                    
-                    # Handle different date formats
                     if ' ' in game_date and len(game_date.split(' ')) == 2:
-                        # Format: '07/15 20:00' - convert to proper datetime
                         date_part, time_part = game_date.split(' ')
-                        # Add current year if not present
                         if '/' in date_part and len(date_part.split('/')) == 2:
                             month, day = date_part.split('/')
                             current_year = datetime.now().year
                             date_part = f"{current_year}/{month}/{day}"
-                        
-                        # Parse the date
                         try:
                             game_dt = datetime.strptime(f"{date_part} {time_part}", "%Y/%m/%d %H:%M")
                         except ValueError:
-                            # Try alternative format
                             game_dt = datetime.strptime(f"{date_part} {time_part}", "%m/%d %H:%M")
-                            # Add current year
                             game_dt = game_dt.replace(year=datetime.now().year)
                     else:
-                        # Try ISO format
                         game_dt = datetime.fromisoformat(game_date.replace('Z', '+00:00'))
-                    
                     now = datetime.now()
                     if game_dt > now + timedelta(days=7):
                         safe_print(f"[ACE GAME FILTER] Excluded game due to future date: {away_team} vs {home_team} ({game_date})")
                         return False
                 except Exception as e:
                     safe_print(f"[ACE GAME FILTER] Could not parse date {game_date}: {e}")
-            
             safe_print(f"[ACE GAME FILTER] Included game: {away_team} vs {home_team}")
             return True
-    
         except Exception as e:
             safe_print(f"[ACE GAME FILTER] Error checking game: {e}")
             return False
@@ -1289,15 +1126,24 @@ class AceScraper:
         """Run Ace calculations - scrape Ace games and match to Pinnacle events"""
         try:
             safe_print("[ACE] Starting Ace calculations - scraping Ace games and matching to Pinnacle...")
-            
+
+            # Always start a new session and login fresh (to match test behavior)
+            import requests
+            self.session = requests.Session()
+            self.logged_in = False
+            safe_print("[ACE] Forced new session and login for production run")
+            if not self.login():
+                safe_print("[ACE] Login failed at start of run_ace_calculations")
+                return {"error": "Login failed", "status": "error"}
+
             # Step 1: Scrape Ace games
             safe_print("[ACE] Step 1: Scraping Ace games...")
             ace_games = self.scrape_games()
-            
+
             if not ace_games:
                 safe_print("[ACE] No Ace games scraped")
                 return {"error": "No Ace games found", "status": "error"}
-            
+
             safe_print(f"[ACE] Scraped {len(ace_games)} Ace games")
             
             # Show sample of scraped games
@@ -1343,13 +1189,47 @@ class AceScraper:
                         pinnacle_data = self._get_pinnacle_odds(matched_event_id)
                         if pinnacle_data:
                             # Calculate EV for each market
-                            markets = self._calculate_ev_for_game(game, pinnacle_data)
-                            for market in markets:
-                                matched_markets.append(market)
-                                if float(market.get('ev', '0').replace('%', '')) > 0:
-                                    total_with_ev += 1
-                                    if total_with_ev <= 3:  # Log first 3 positive EV markets
-                                        safe_print(f"[ACE] ✓ Found positive EV market: {market.get('market', '')} EV: {market.get('ev', '')}")
+                            ev_results = self._calculate_ev_for_game(game, pinnacle_data)
+                            if ev_results:
+                                for result in ev_results:
+                                    # Get team names from the matched Pinnacle data
+                                    pinnacle_home = pinnacle_data.get('home', '')
+                                    pinnacle_away = pinnacle_data.get('away', '')
+                                    
+                                    # Create proper matchup string like Buckeye
+                                    matchup = f"{pinnacle_away} vs {pinnacle_home}" if pinnacle_away and pinnacle_home else " vs "
+                                    
+                                    # Create descriptive bet string like Buckeye
+                                    bet_type = result.get("market", "")
+                                    selection = result.get("selection", "")
+                                    line = result.get("line", "")
+                                    
+                                    if bet_type == "Moneyline":
+                                        bet_description = f"Moneyline - {selection}"
+                                    elif bet_type == "Spread":
+                                        bet_description = f"Spread - {selection} {line}"
+                                    elif bet_type == "Total":
+                                        bet_description = f"Total {line} - {selection}"
+                                    else:
+                                        bet_description = f"{bet_type} - {selection}"
+                                    
+                                    # Format exactly like Buckeye for frontend compatibility
+                                    market = {
+                                        "matchup": matchup,
+                                        "league": game.get("league", ""),
+                                        "bet": bet_description,
+                                        "betbck_odds": result.get("betbck_odds", ""),
+                                        "pinnacle_nvp": result.get("pinnacle_nvp", ""),
+                                        "ev": result.get("ev", "0%"),
+                                        "ev_val": float(str(result.get('ev', '0')).replace('%', '')) / 100 if result.get('ev') else 0,
+                                        "start_time": game.get("date_time", ""),
+                                        "event_id": matched_event_id
+                                    }
+                                    matched_markets.append(market)
+                                    if float(str(result.get('ev', '0')).replace('%', '')) > 0:
+                                        total_with_ev += 1
+                                        if total_with_ev <= 3:  # Log first 3 positive EV markets
+                                            safe_print(f"[ACE] ✓ Found positive EV market: {market.get('bet', '')} EV: {market.get('ev', '')}")
                     elif i < 5:  # Log first 5 failed matches
                         safe_print(f"[ACE] ✗ No match found for game {i+1}")
                 except Exception as match_error:
@@ -1363,13 +1243,14 @@ class AceScraper:
             safe_print(f"[ACE] Matching complete: {total_matched}/{len(ace_games)} games matched ({match_rate:.1f}%)")
             safe_print(f"[ACE] EV calculation complete: {total_with_ev} markets with positive EV ({ev_rate:.1f}%)")
             
-            # Sort markets by EV (highest first)
+            # Sort markets by EV (highest first) and limit to top 50 (like Buckeye but more markets)
             matched_markets.sort(key=lambda x: float(x.get('ev', '0').replace('%', '')), reverse=True)
+            top_50_markets = matched_markets[:50]  # Top 50 markets for backend processing
             
-            # Save results
+            # Save results in Buckeye format
             ace_results = {
-                "markets": matched_markets,
-                "last_update": datetime.now().isoformat(),
+                "events": top_50_markets,  # Top 50 markets in Buckeye format
+                "last_run": datetime.now().isoformat(),
                 "total_processed": len(ace_games),
                 "total_matched": total_matched,
                 "total_with_ev": total_with_ev,
@@ -1380,18 +1261,18 @@ class AceScraper:
             with open(self.results_file, 'w') as f:
                 json.dump(ace_results, f, indent=2)
             
-            safe_print(f"[ACE] Saved {len(matched_markets)} markets to {self.results_file}")
+            safe_print(f"[ACE] Saved {len(top_50_markets)} markets to {self.results_file}")
             
             return {
                 "status": "success",
                 "message": f"Processed {len(ace_games)} Ace games, matched {total_matched}, found {total_with_ev} with EV",
-                "results": matched_markets,
+                "events": top_50_markets,  # Top 50 markets in Buckeye format
                 "total_processed": len(ace_games),
                 "total_matched": total_matched,
                 "total_with_ev": total_with_ev,
                 "match_rate": match_rate,
                 "ev_rate": ev_rate,
-                "timestamp": ace_results["last_update"]
+                "last_update": ace_results["last_run"]
             }
             
         except Exception as e:
@@ -1449,24 +1330,6 @@ class AceScraper:
             safe_print(f"[ACE] Error fetching event IDs: {e}")
             import traceback
             safe_print(f"[ACE] Traceback: {traceback.format_exc()}")
-            return []
-    
-    def _fetch_active_leagues(self) -> List[str]:
-        """Fetch active leagues from Ace"""
-        try:
-            # Use the existing method to get active league IDs
-            league_ids = self.get_active_league_ids()
-            if not league_ids:
-                return []
-            
-            # Convert comma-separated string to list
-            if isinstance(league_ids, str):
-                return [lid.strip() for lid in league_ids.split(',') if lid.strip()]
-            else:
-                return league_ids
-                
-        except Exception as e:
-            safe_print(f"[ACE] Error fetching active leagues: {e}")
             return []
     
     def _filter_games(self, games: List[Dict]) -> List[Dict]:
@@ -1827,37 +1690,88 @@ class AceScraper:
             return None
 
     def _extract_pinnacle_odds(self, pinnacle_data: Dict) -> Dict:
-        """Extract NVP American odds and lines from Pinnacle Swordfish data, fallback to regular odds if needed."""
+        """Extract all NVP American odds and lines from all Pinnacle periods, robust like Buckeye."""
         try:
-            event = pinnacle_data.get('data', {}).get('data', {})
-            periods = event.get('periods', {})
-            main_period = periods.get('num_0', {})
-            odds = {}
-            # Moneyline
-            moneyline = main_period.get('money_line', {})
-            odds['home_moneyline_nvp'] = moneyline.get('nvp_american_home') or moneyline.get('american_home')
-            odds['away_moneyline_nvp'] = moneyline.get('nvp_american_away') or moneyline.get('american_away')
-            # Spreads
-            odds['home_spreads'] = []
-            odds['away_spreads'] = []
-            for line, spread in main_period.get('spreads', {}).items():
-                odds['home_spreads'].append({
-                    'line': line,
-                    'odds': spread.get('nvp_american_home') or spread.get('american_home')
-                })
-                odds['away_spreads'].append({
-                    'line': line,
-                    'odds': spread.get('nvp_american_away') or spread.get('american_away')
-                })
-            # Totals
-            odds['totals'] = []
-            for line, total in main_period.get('totals', {}).items():
-                odds['totals'].append({
-                    'line': line,
-                    'over_odds': total.get('nvp_american_over') or total.get('american_over'),
-                    'under_odds': total.get('nvp_american_under') or total.get('american_under')
-                })
-            logger.info(f"[ACE PINNACLE ODDS] Extracted odds: {json.dumps(odds, indent=2)}")
+            # Use the same approach as Buckeye - let odds_processing handle it
+            from odds_processing import fetch_live_pinnacle_event_odds
+            
+            # If we have an event_id, fetch fresh data
+            event_id = pinnacle_data.get('event_id')
+            if event_id:
+                logger.info(f"[ACE PINNACLE ODDS] Fetching fresh odds for event {event_id}")
+                fresh_data = fetch_live_pinnacle_event_odds(event_id)
+                if fresh_data and fresh_data.get("status") == "success":
+                    pinnacle_data = fresh_data.get("data", {})
+            
+            # Defensive: handle both processed and raw structures
+            event = None
+            if 'data' in pinnacle_data and isinstance(pinnacle_data['data'], dict):
+                if 'data' in pinnacle_data['data']:
+                    event = pinnacle_data['data']['data']
+                else:
+                    event = pinnacle_data['data']
+            else:
+                event = pinnacle_data
+
+            periods = event.get('periods', {}) if event else {}
+            
+            # Debug logging
+            logger.info(f"[ACE PINNACLE ODDS DEBUG] Raw pinnacle_data structure: {json.dumps(pinnacle_data, indent=2)}")
+            logger.info(f"[ACE PINNACLE ODDS DEBUG] Extracted event: {json.dumps(event, indent=2)}")
+            logger.info(f"[ACE PINNACLE ODDS DEBUG] periods: {json.dumps(periods, indent=2)}")
+            
+            odds = {
+                'home_moneyline_nvp': [],
+                'away_moneyline_nvp': [],
+                'home_spreads': [],
+                'away_spreads': [],
+                'totals': []
+            }
+            
+            # If periods is None or empty, return empty odds
+            if not periods:
+                logger.warning("[ACE PINNACLE ODDS] No periods found in Pinnacle data")
+                return odds
+            
+            # Ensure periods is a dict before iterating
+            if not isinstance(periods, dict):
+                logger.warning(f"[ACE PINNACLE ODDS] periods is not a dict: {type(periods)}")
+                return odds
+            
+            for period_key, period in periods.items():
+                # Moneyline
+                moneyline = period.get('money_line', {})
+                if moneyline:
+                    if moneyline.get('nvp_american_home') or moneyline.get('american_home'):
+                        odds['home_moneyline_nvp'].append({
+                            'period': period_key,
+                            'odds': moneyline.get('nvp_american_home') or moneyline.get('american_home')
+                        })
+                    if moneyline.get('nvp_american_away') or moneyline.get('american_away'):
+                        odds['away_moneyline_nvp'].append({
+                            'period': period_key,
+                            'odds': moneyline.get('nvp_american_away') or moneyline.get('american_away')
+                        })
+                # Spreads
+                for line, spread in period.get('spreads', {}).items():
+                    odds['home_spreads'].append({
+                        'period': period_key,
+                        'line': line,
+                        'odds': spread.get('nvp_american_home') or spread.get('american_home')
+                    })
+                    odds['away_spreads'].append({
+                        'period': period_key,
+                        'line': line,
+                        'odds': spread.get('nvp_american_away') or spread.get('american_away')
+                    })
+                # Totals
+                for line, total in period.get('totals', {}).items():
+                    odds['totals'].append({
+                        'period': period_key,
+                        'line': line,
+                        'over_odds': total.get('nvp_american_over') or total.get('american_over'),
+                        'under_odds': total.get('nvp_american_under') or total.get('american_under')
+                    })
             return odds
         except Exception as e:
             logger.error(f"[ACE PINNACLE ODDS] Error extracting odds: {e}")
@@ -1876,90 +1790,62 @@ class AceScraper:
             ace_bet_data = self._convert_ace_to_betbck_format(game)
             logger.info(f"[ACE EV] Ace BetBCK format: {json.dumps(ace_bet_data, indent=2)}")
             logger.info(f"[ACE EV] Pinnacle data: {json.dumps(matched_pinnacle, indent=2)}")
-            # Use the same EV calculation logic as Buckeye
-            ev_markets = []
-            pinnacle_odds = self._extract_pinnacle_odds(matched_pinnacle)
             
-            # Moneyline EV calculation
-            if ace_bet_data.get('moneyline_away') and pinnacle_odds.get('away_moneyline_nvp'):
-                ev = self._calculate_ev(ace_bet_data['moneyline_away'], pinnacle_odds['away_moneyline_nvp'])
-                if ev is not None and abs(ev) <= 15.0:  # CAP EV AT 15%
-                    ev_markets.append({
-                        'market': 'Moneyline',
-                        'selection': 'Away',
-                        'line': '',
-                        'pinnacle_nvp': pinnacle_odds['away_moneyline_nvp'],
-                        'betbck_odds': ace_bet_data['moneyline_away'],
-                        'ev': f"{ev:.2f}%"
-                    })
+            # Use the same EV calculation logic as Buckeye - use analyze_markets_for_ev
+            from utils.pod_utils import analyze_markets_for_ev
+            # Ensure we have valid data before calling analyze_markets_for_ev
+            if not matched_pinnacle or not ace_bet_data:
+                logger.warning(f"[ACE EV] Missing data for EV calculation - matched_pinnacle: {bool(matched_pinnacle)}, ace_bet_data: {bool(ace_bet_data)}")
+                return []
             
-            if ace_bet_data.get('moneyline_home') and pinnacle_odds.get('home_moneyline_nvp'):
-                ev = self._calculate_ev(ace_bet_data['moneyline_home'], pinnacle_odds['home_moneyline_nvp'])
-                if ev is not None and abs(ev) <= 15.0:  # CAP EV AT 15%
-                    ev_markets.append({
-                        'market': 'Moneyline',
-                        'selection': 'Home',
-                        'line': '',
-                        'pinnacle_nvp': pinnacle_odds['home_moneyline_nvp'],
-                        'betbck_odds': ace_bet_data['moneyline_home'],
-                        'ev': f"{ev:.2f}%"
-                    })
+            # Validate Pinnacle data structure - ensure it has periods
+            if not isinstance(matched_pinnacle, dict):
+                logger.warning(f"[ACE EV] Invalid Pinnacle data structure - not a dict: {type(matched_pinnacle)}")
+                return []
             
-            # Spread EV calculation
-            if ace_bet_data.get('spread_away') and pinnacle_odds.get('away_spreads'):
-                for spread in pinnacle_odds['away_spreads']:
-                    ev = self._calculate_ev(ace_bet_data['spread_away'], spread['odds'])
-                    if ev is not None and abs(ev) <= 15.0:  # CAP EV AT 15%
-                        ev_markets.append({
-                            'market': 'Spread',
-                            'selection': 'Away',
-                            'line': spread['line'],
-                            'pinnacle_nvp': spread['odds'],
-                            'betbck_odds': ace_bet_data['spread_away'],
-                            'ev': f"{ev:.2f}%"
-                        })
+            # Check if periods exist and are valid
+            periods = matched_pinnacle.get('periods', {})
+            if not periods or not isinstance(periods, dict):
+                logger.warning(f"[ACE EV] No valid periods found in Pinnacle data: {type(periods)}")
+                return []
             
-            if ace_bet_data.get('spread_home') and pinnacle_odds.get('home_spreads'):
-                for spread in pinnacle_odds['home_spreads']:
-                    ev = self._calculate_ev(ace_bet_data['spread_home'], spread['odds'])
-                    if ev is not None and abs(ev) <= 15.0:  # CAP EV AT 15%
-                        ev_markets.append({
-                            'market': 'Spread',
-                            'selection': 'Home',
-                            'line': spread['line'],
-                            'pinnacle_nvp': spread['odds'],
-                            'betbck_odds': ace_bet_data['spread_home'],
-                            'ev': f"{ev:.2f}%"
-                        })
+            # Ensure we have at least one period with data
+            has_valid_period = False
+            for period_key, period_data in periods.items():
+                if isinstance(period_data, dict) and (period_data.get('money_line') or period_data.get('spreads') or period_data.get('totals')):
+                    has_valid_period = True
+                    break
             
-            # Total EV calculation
-            if ace_bet_data.get('total_over') and pinnacle_odds.get('totals'):
-                for total in pinnacle_odds['totals']:
-                    ev = self._calculate_ev(ace_bet_data['total_over'], total['over_odds'])
-                    if ev is not None and abs(ev) <= 15.0:  # CAP EV AT 15%
-                        ev_markets.append({
-                            'market': 'Total',
-                            'selection': 'Over',
-                            'line': total['line'],
-                            'pinnacle_nvp': total['over_odds'],
-                            'betbck_odds': ace_bet_data['total_over'],
-                            'ev': f"{ev:.2f}%"
-                        })
+            if not has_valid_period:
+                logger.warning(f"[ACE EV] No valid period data found in Pinnacle periods")
+                return []
             
-            if ace_bet_data.get('total_under') and pinnacle_odds.get('totals'):
-                for total in pinnacle_odds['totals']:
-                    ev = self._calculate_ev(ace_bet_data['total_under'], total['under_odds'])
-                    if ev is not None and abs(ev) <= 15.0:  # CAP EV AT 15%
-                        ev_markets.append({
-                            'market': 'Total',
-                            'selection': 'Under',
-                            'line': total['line'],
-                            'pinnacle_nvp': total['under_odds'],
-                            'betbck_odds': ace_bet_data['total_under'],
-                            'ev': f"{ev:.2f}%"
-                        })
+            # Ensure ace_bet_data has at least some odds
+            if not any([
+                ace_bet_data.get('home_moneyline_american'),
+                ace_bet_data.get('away_moneyline_american'),
+                ace_bet_data.get('home_spreads'),
+                ace_bet_data.get('away_spreads'),
+                ace_bet_data.get('game_total_line')
+            ]):
+                logger.warning(f"[ACE EV] No valid odds found in Ace bet data")
+                return []
             
-            return ev_markets
+            ev_results = analyze_markets_for_ev(ace_bet_data, {"data": matched_pinnacle})
+            
+            if ev_results:
+                logger.info(f"[ACE EV] Found {len(ev_results)} EV opportunities")
+                for result in ev_results:
+                    ev_value = result.get('ev', '0')
+                    # Handle both string and numeric EV values
+                    if isinstance(ev_value, str):
+                        logger.debug(f"[ACE EV] Market: {result.get('market', 'Unknown')}, EV: {ev_value}")
+                    else:
+                        logger.debug(f"[ACE EV] Market: {result.get('market', 'Unknown')}, EV: {ev_value:.3f}")
+            else:
+                logger.info(f"[ACE EV] No EV opportunities found")
+            
+            return ev_results
             
         except Exception as e:
             logger.error(f"[ACE EV] Error calculating EV for game: {e}")
@@ -1983,12 +1869,19 @@ class AceScraper:
                 'game_total_under_odds': None
             }
             
+            # Add moneyline to the format for EV calculation
+            if ace_odds.get('moneyline'):
+                betbck_format['moneyline_away'] = ace_odds.get('moneyline')
+            if home_odds.get('moneyline'):
+                betbck_format['moneyline_home'] = home_odds.get('moneyline')
+            
             # Convert spreads - use the parsed spread_line and spread_odds
             if ace_odds.get('spread_line') and ace_odds.get('spread_odds'):
                 betbck_format['away_spreads'].append({
                     'line': ace_odds.get('spread_line'),
                     'odds': ace_odds.get('spread_odds')
                 })
+                betbck_format['spread_away'] = ace_odds.get('spread_odds')
                 logger.info(f"[ACE CONVERT] Added away spread: {ace_odds.get('spread_line')} @ {ace_odds.get('spread_odds')}")
             
             if home_odds.get('spread_line') and home_odds.get('spread_odds'):
@@ -1996,6 +1889,7 @@ class AceScraper:
                     'line': home_odds.get('spread_line'),
                     'odds': home_odds.get('spread_odds')
                 })
+                betbck_format['spread_home'] = home_odds.get('spread_odds')
                 logger.info(f"[ACE CONVERT] Added home spread: {home_odds.get('spread_line')} @ {home_odds.get('spread_odds')}")
             
             # Convert totals - use the parsed total_line and total_odds
@@ -2005,9 +1899,13 @@ class AceScraper:
                 if ace_odds.get('total_ou') == 'o':
                     betbck_format['game_total_over_odds'] = ace_odds.get('total_odds')
                     betbck_format['game_total_under_odds'] = home_odds.get('total_odds')
+                    betbck_format['total_over'] = ace_odds.get('total_odds')
+                    betbck_format['total_under'] = home_odds.get('total_odds')
                 else:  # 'u' for under
                     betbck_format['game_total_over_odds'] = home_odds.get('total_odds')
                     betbck_format['game_total_under_odds'] = ace_odds.get('total_odds')
+                    betbck_format['total_over'] = home_odds.get('total_odds')
+                    betbck_format['total_under'] = ace_odds.get('total_odds')
                 logger.info(f"[ACE CONVERT] Added total: {ace_odds.get('total_line')} - Over: {betbck_format['game_total_over_odds']}, Under: {betbck_format['game_total_under_odds']}")
             
             logger.info(f"[ACE CONVERT] Final BetBCK format: {betbck_format}")
@@ -2131,22 +2029,25 @@ class AceScraper:
             return None
     
     def get_ace_results(self) -> Dict[str, Any]:
-        """Get stored Ace results"""
+        """Get stored Ace results in Buckeye format"""
         try:
             if not self.results_file.exists():
                 return {
                     "status": "error",
                     "message": "No Ace results found. Run calculations first.",
-                    "data": {"markets": [], "last_update": None}
+                    "markets": [],
+                    "last_update": None
                 }
             
             with open(self.results_file, 'r') as f:
                 data = json.load(f)
             
+            # Return in the format the frontend expects (like Buckeye)
             return {
                 "status": "success",
                 "message": "Ace results retrieved successfully",
-                "data": data
+                "markets": data.get("events", []),  # Map events to markets for frontend
+                "last_update": data.get("last_run", None)
             }
             
         except Exception as e:
@@ -2154,7 +2055,8 @@ class AceScraper:
             return {
                 "status": "error",
                 "message": f"Failed to read Ace results: {str(e)}",
-                "data": {"markets": [], "last_update": None}
+                "markets": [],
+                "last_update": None
             } 
 
     def _clean_odds_string(self, odds_str: str) -> str:
