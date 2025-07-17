@@ -2,7 +2,7 @@ import time
 import threading
 import logging
 import copy
-from typing import Dict, Set, Any
+from typing import Dict, Set, Any, Optional, Callable
 from odds_processing import fetch_live_pinnacle_event_odds
 from utils import process_event_odds_for_display
 from collections import defaultdict
@@ -19,6 +19,12 @@ class PodEventManager:
         self.EVENT_DATA_EXPIRY_SECONDS = 300
         self.BACKGROUND_REFRESH_INTERVAL_SECONDS = 3
         self._event_locks = defaultdict(threading.Lock)
+        self._broadcast_callback: Optional[Callable] = None
+        self._main_event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def set_broadcast_callback(self, callback: Callable, event_loop: asyncio.AbstractEventLoop):
+        self._broadcast_callback = callback
+        self._main_event_loop = event_loop
 
     def get_event_lock(self, event_id: str):
         return self._event_locks[event_id]
@@ -30,12 +36,12 @@ class PodEventManager:
     def add_active_event(self, event_id: str, event_data: Dict[str, Any]) -> None:
         with self._active_events_lock:
             self._active_events[event_id] = event_data
-        broadcast_all_active_events()
+        self._broadcast_all_active_events()
 
     def remove_active_event(self, event_id: str) -> None:
         with self._active_events_lock:
             self._active_events.pop(event_id, None)
-        broadcast_all_active_events()
+        self._broadcast_all_active_events()
 
     def is_event_dismissed(self, event_id: str) -> bool:
         with self._dismissed_events_lock:
@@ -53,7 +59,23 @@ class PodEventManager:
         with self._active_events_lock:
             if event_id in self._active_events:
                 self._active_events[event_id].update(update_data)
-        broadcast_all_active_events()
+        self._broadcast_all_active_events()
+
+    def _broadcast_all_active_events(self):
+        if self._broadcast_callback and self._main_event_loop and self._main_event_loop.is_running():
+            active_events = self.get_active_events()
+            events_payload = {eid: event for eid, event in active_events.items()}
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    self._broadcast_callback({
+                        "type": "pod_alerts_full",
+                        "events": events_payload
+                    }),
+                    self._main_event_loop
+                )
+                logger.info(f"[PodEventManager] Broadcasted {len(active_events)} active events")
+            except Exception as e:
+                logger.error(f"[PodEventManager] Error broadcasting events: {e}")
 
     def background_event_refresher(self):
         while True:
@@ -110,31 +132,28 @@ class PodEventManager:
                                     "last_pinnacle_data_update_timestamp": current_time,
                                     "pinnacle_data_processed": live_pinnacle_odds_processed
                                 })
-                                # Broadcast updated event to frontend
-                                updated_event = self.get_active_events().get(event_id)
-                                if updated_event:
-                                    import asyncio
-                                    from backend.main import broadcast_new_alert, main_event_loop
-                                    if main_event_loop and main_event_loop.is_running():
-                                        asyncio.run_coroutine_threadsafe(
-                                            broadcast_new_alert(event_id, updated_event),
-                                            main_event_loop
-                                        )
+                                logger.info(f"[BackgroundRefresher] Updated Pinnacle odds for Event ID: {event_id}")
+
+                                # Broadcast individual event update
+                                if self._broadcast_callback and self._main_event_loop and self._main_event_loop.is_running():
+                                    updated_event = self.get_active_events().get(event_id)
+                                    if updated_event:
+                                        try:
+                                            asyncio.run_coroutine_threadsafe(
+                                                self._broadcast_callback({
+                                                    "type": "pod_alert",
+                                                    "eventId": event_id,
+                                                    "event": updated_event
+                                                }),
+                                                self._main_event_loop
+                                            )
+                                            logger.info(f"[BackgroundRefresher] Broadcasted individual update for Event ID: {event_id}")
+                                        except Exception as e:
+                                            logger.error(f"[BackgroundRefresher] Error broadcasting individual update: {e}")
                         except Exception as e:
                             logger.error(f"[BackgroundRefresher] Error updating Pinnacle odds for event {event_id}: {e}")
             except Exception as e:
                 logger.error(f"[BackgroundRefresher] Error: {e}")
 
-def broadcast_all_active_events():
-    import asyncio
-    from backend.main import manager, main_event_loop, pod_event_manager
-    active_events = pod_event_manager.get_active_events()
-    events_payload = {eid: event for eid, event in active_events.items()}
-    if main_event_loop and main_event_loop.is_running():
-        asyncio.run_coroutine_threadsafe(
-            manager.broadcast({
-                "type": "pod_alerts_full",
-                "events": events_payload
-            }),
-            main_event_loop
-        ) 
+# Global instance
+pod_event_manager = PodEventManager() 

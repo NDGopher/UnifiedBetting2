@@ -13,25 +13,27 @@ export const useWebSocket = (url: string): WebSocketHook => {
 
   useEffect(() => {
     const connect = () => {
+      console.log('[WebSocket] Attempting to connect to:', url);
       ws.current = new WebSocket(url);
 
       ws.current.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('[WebSocket] Connected successfully to:', url);
         setIsConnected(true);
       };
 
       ws.current.onclose = () => {
-        console.log('WebSocket disconnected');
+        console.log('[WebSocket] Disconnected from:', url);
         setIsConnected(false);
         // Attempt to reconnect after 5 seconds
         setTimeout(connect, 5000);
       };
 
       ws.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[WebSocket] Error:', error);
       };
 
       ws.current.onmessage = (event) => {
+        console.log('[WebSocket] Message received:', event.data.substring(0, 10) + '...');
         setLastMessage(event);
       };
     };
@@ -40,6 +42,7 @@ export const useWebSocket = (url: string): WebSocketHook => {
 
     return () => {
       if (ws.current) {
+        console.log('[WebSocket] Closing connection to:', url);
         ws.current.close();
       }
     };
@@ -47,9 +50,10 @@ export const useWebSocket = (url: string): WebSocketHook => {
 
   const sendMessage = useCallback((message: string) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      console.log('[WebSocket] Sending message:', message);
       ws.current.send(message);
     } else {
-      console.warn('WebSocket is not connected');
+      console.warn('[WebSocket] Cannot send message - not connected');
     }
   }, []);
 

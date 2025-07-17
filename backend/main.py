@@ -127,6 +127,10 @@ async def startup_event():
     main_event_loop = asyncio.get_running_loop()
     logger.info("\n=== Starting up Unified Betting App ===")
     logger.info("Initializing services...")
+    
+    # Set up the broadcast callback for pod_event_manager
+    pod_event_manager.set_broadcast_callback(manager.broadcast, main_event_loop)
+    logger.info("POD event manager broadcast callback configured")
     logger.info("Background event refresher started")
     
     # Start PTO scraper if enabled
@@ -276,8 +280,105 @@ async def handle_pod_alert(request: Request):
 
 @app.get("/test")
 async def test_endpoint():
-    logger.info("[DEBUG] Test endpoint called")
-    return JSONResponse({"status": "success", "message": "Backend is working!", "timestamp": time.time()})
+    return JSONResponse({"message": "Backend is running!", "timestamp":datetime.now().isoformat()})
+
+@app.get("/test/websocket")
+async def test_websocket():
+    try:
+        test_message = {
+            "type": "pod_alerts_full",
+            "events": [
+                {
+                    "eventId": "test_event_id",
+                    "event": {
+                        "title": "Test Event",
+                        "meta_info": "Test broadcast",
+                        "last_update": int(time.time()),
+                        "alert_description": "Test alert",
+                        "alert_meta": "Test meta",
+                        "markets": [
+                            {
+                                "market": "Test Market",
+                                "selection": "Test Selection",
+                                "line": "Test Line",
+                                "pinnacle_nvp": f"Test NVP {int(time.time())}",
+                                "betbck_odds": "Test Odds",
+                                "ev": "Test EV"
+                            }
+                        ],
+                        "alert_arrival_timestamp": int(time.time())
+                    }
+                }
+            ]
+        }
+        
+        await manager.broadcast(test_message)
+        logger.info("[Test] WebSocket broadcast sent successfully")
+        return JSONResponse({
+            "status": "success",
+            "message": "Test broadcast sent",
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"[Test] WebSocket broadcast failed: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": f"WebSocket test failed: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }, status_code=500)
+
+@app.get("/test/pod-alert")
+async def test_pod_alert():
+    try:
+        # Create a test POD alert with realistic data
+        test_event = {
+            "title": "Test Team A vs Test Team B",
+            "meta_info": "Test League | Starts: 2024-01-15T20:00:00Z",
+            "last_update": int(time.time()),
+            "alert_description": "Test POD Alert",
+            "alert_meta": "Test Meta Info",
+            "markets": [
+                {
+                    "market": "Money Line",
+                    "selection": "Test Team A",
+                    "line": "-110",
+                    "pinnacle_nvp": f"Test NVP {int(time.time())}",
+                    "betbck_odds": "+105",
+                    "ev": "5.2%"
+                },
+                {
+                    "market": "Money Line",
+                    "selection": "Test Team B",
+                    "line": "-110",
+                    "pinnacle_nvp": f"Test NVP {int(time.time())}",
+                    "betbck_odds": "+115",
+                    "ev": "3.8%"
+                }
+            ],
+            "alert_arrival_timestamp": int(time.time())
+        }
+        
+        test_message = {
+            "type": "pod_alerts_full",
+            "events": {
+                "test_pod_event": test_event
+            }
+        }
+        
+        await manager.broadcast(test_message)
+        logger.info("[Test] POD alert broadcast sent successfully")
+        return JSONResponse({
+            "status": "success",
+            "message": "POD alert test broadcast sent",
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"[Test] POD alert broadcast failed: {e}")
+        return JSONResponse({
+            "status": "error",
+            "message": f"POD alert test failed: {str(e)}",
+            "timestamp": datetime.now().isoformat()
+        }, status_code=500)
 
 @app.get("/get_active_events_data")
 async def get_active_events_data():
@@ -930,6 +1031,7 @@ def broadcast_new_alert(event_id, event_data):
         "eventId": event_id,
         "event": event_obj
     }))
+    logger.info(f"[Broadcast] Sent individual alert for Event ID: {event_id}")
 
 @app.get("/api/debug/matching")
 async def debug_matching():

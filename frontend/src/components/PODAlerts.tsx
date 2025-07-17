@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, useContext } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   Table,
   TableBody,
@@ -20,7 +20,6 @@ import {
 } from "@mui/material";
 import { Refresh as RefreshIcon } from "@mui/icons-material";
 import StarIcon from "@mui/icons-material/Star";
-import { BetbckTabContext } from "../App";
 import { useWebSocket } from '../hooks/useWebSocket';
 import './PODAlerts.css';
 
@@ -65,9 +64,6 @@ const PODAlerts: React.FC = () => {
   const { lastMessage, isConnected } = useWebSocket('ws://localhost:5001/ws');
   const [nvpFlash, setNvpFlash] = useState<{ [key: string]: boolean }>({});
 
-  // Helper to safely convert any value to string
-  const safeString = (val: any) => (val === null || val === undefined ? '' : String(val));
-
   // Helper to get markets from event
   const getMarkets = (event: any) => Array.isArray(event.markets) ? event.markets : [];
 
@@ -76,27 +72,49 @@ const PODAlerts: React.FC = () => {
     if (lastMessage && lastMessage.data) {
       try {
         const data = JSON.parse(lastMessage.data);
-        if (data.type === 'pod_alerts_full' && data.events) {
-          // Replace the entire event list with the latest from backend
-          setEvents(data.events);
-          setLastUpdate(new Date());
-        } else if (data.type === 'pod_alert' && data.eventId && data.event) {
-          // Fallback: update the specific event
-          setEvents(prev => ({ ...prev, [data.eventId]: data.event }));
-          setLastUpdate(new Date());
-          // NVP flash effect logic remains unchanged
-          const event = data.event;
-          if (event.markets && Array.isArray(event.markets)) {
-            event.markets.forEach((market: Market, idx: number) => {
-              const key = `${data.eventId}_${market.market}_${market.selection}_${market.line}`;
-              const prevMarkets = prevMarketsRef.current[data.eventId] || [];
-              const prev = prevMarkets[idx];
-              if (prev && prev.pinnacle_nvp !== market.pinnacle_nvp) {
-                setNvpFlash(flash => ({ ...flash, [key]: true }));
-                setTimeout(() => setNvpFlash(flash => ({ ...flash, [key]: false })), 1500);
-              }
-            });
+        
+        // Log all incoming messages for debugging
+        console.log('[PODAlerts] Raw WebSocket message received:', data.type);
+        
+        // Only process POD-related messages, ignore PTO messages
+        if (data.type === 'pto_prop_update') {
+          // This is a PTO message, ignore it in PODAlerts
+          console.log('[PODAlerts] Ignoring PTO message:', data.type);
+          return;
+        }
+        
+        // Only log and process POD messages
+        if (data.type === 'pod_alerts_full' || data.type === 'pod_alert') {
+          console.log('[PODAlerts] Processing POD message:', data.type);
+          
+          if (data.type === 'pod_alerts_full' && data.events) {
+            // Replace the entire event list with the latest from backend
+            console.log('[PODAlerts] Updating all events:', Object.keys(data.events).length, 'events');
+            setEvents(data.events);
+            setLastUpdate(new Date());
+          } else if (data.type === 'pod_alert' && data.eventId && data.event) {
+            // Fallback: update the specific event
+            console.log('[PODAlerts] Updating specific event:', data.eventId);
+            setEvents(prev => ({ ...prev, [data.eventId]: data.event }));
+            setLastUpdate(new Date());
+            // NVP flash effect logic remains unchanged
+            const event = data.event;
+            if (event.markets && Array.isArray(event.markets)) {
+              event.markets.forEach((market: Market, idx: number) => {
+                const key = `${data.eventId}_${market.market}_${market.selection}_${market.line}`;
+                const prevMarkets = prevMarketsRef.current[data.eventId] || [];
+                const prev = prevMarkets[idx];
+                if (prev && prev.pinnacle_nvp !== market.pinnacle_nvp) {
+                  console.log('[PODAlerts] NVP changed for', key, ':', prev.pinnacle_nvp, '→', market.pinnacle_nvp);
+                  setNvpFlash(flash => ({ ...flash, [key]: true }));
+                  setTimeout(() => setNvpFlash(flash => ({ ...flash, [key]: false })), 1500);
+                }
+              });
+            }
           }
+        } else {
+          // Log other message types for debugging
+          console.log('[PODAlerts] Received unknown message type:', data.type);
         }
       } catch (e) {
         console.error('Error parsing WebSocket message:', e);
@@ -310,6 +328,24 @@ const PODAlerts: React.FC = () => {
           <Typography variant="caption" color="text.secondary">
             Last update: {lastUpdate.toLocaleTimeString()}
           </Typography>
+          <Box
+            sx={{
+              px: 1.5,
+              py: 0.2,
+              borderRadius: '12px',
+              background: isConnected ? '#2e7d32' : '#d32f2f',
+              border: '1px solid #bdbdbd',
+              height: 22,
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '0.85rem',
+              color: '#ffffff',
+              fontWeight: 600,
+              letterSpacing: 0,
+            }}
+          >
+            {isConnected ? 'POD WS CONNECTED' : 'POD WS DISCONNECTED'}
+          </Box>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button startIcon={<RefreshIcon />} onClick={handleManualRefresh} disabled={loading} variant="outlined" size="small">
@@ -317,6 +353,21 @@ const PODAlerts: React.FC = () => {
           </Button>
           <Button onClick={testConnection} variant="outlined" size="small" color="secondary">
             Test Connection
+          </Button>
+          <Button 
+            onClick={() => {
+              console.log('[PODAlerts] Manual WebSocket test - Connection status:', isConnected);
+              if (isConnected) {
+                console.log('[PODAlerts] WebSocket is connected, should receive updates');
+              } else {
+                console.log('[PODAlerts] WebSocket is NOT connected');
+              }
+            }} 
+            variant="outlined" 
+            size="small" 
+            color="info"
+          >
+            Test WS
           </Button>
           <Button onClick={() => setShowOnlyEV(ev => !ev)} variant={showOnlyEV ? "contained" : "outlined"} size="small" color="success">
             {showOnlyEV ? "Show All" : "Show +EV Only"}

@@ -4,11 +4,6 @@ import {
   Typography,
   Box,
   Grid,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Switch,
   FormControlLabel,
   Alert,
@@ -16,12 +11,6 @@ import {
   IconButton,
   Tooltip,
   Badge,
-  TableContainer,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
 } from "@mui/material";
 import {
   PlayArrow,
@@ -35,7 +24,6 @@ import {
   SportsHockey,
   Casino,
   Delete,
-  Cancel,
 } from "@mui/icons-material";
 import { useWebSocket } from '../hooks/useWebSocket';
 
@@ -207,13 +195,33 @@ const PropBuilder: React.FC = () => {
     if (lastMessage && lastMessage.data) {
       try {
         const data = JSON.parse(lastMessage.data);
-        if (data.type === 'pto_prop_update' && data.props) {
-          // Replace the entire PTO prop list with the latest from backend
-          setPtoData({
-            props: data.props,
-            total_count: data.total_count || 0,
-            last_update: data.last_update || new Date().toISOString()
-          });
+        
+        // Log all incoming messages for debugging
+        console.log('[PropBuilder] Raw WebSocket message received:', data.type);
+        
+        // Only process PTO-related messages, ignore POD messages
+        if (data.type === 'pod_alert' || data.type === 'pod_alerts_full') {
+          // This is a POD message, ignore it in PropBuilder
+          console.log('[PropBuilder] Ignoring POD message:', data.type);
+          return;
+        }
+        
+        // Only log and process PTO messages
+        if (data.type === 'pto_prop_update') {
+          console.log('[PropBuilder] Processing PTO message:', data.type);
+          
+          if (data.props) {
+            // Replace the entire PTO prop list with the latest from backend
+            console.log('[PropBuilder] Updating PTO props:', data.props.length, 'props');
+            setPtoData({
+              props: data.props,
+              total_count: data.total_count || 0,
+              last_update: data.last_update || new Date().toISOString()
+            });
+          }
+        } else {
+          // Log other message types for debugging
+          console.log('[PropBuilder] Received unknown message type:', data.type);
         }
       } catch (e) {
         console.error('[PropBuilder] WebSocket message parse error:', e);
@@ -363,6 +371,22 @@ const PropBuilder: React.FC = () => {
             />
             <Typography variant="body2" sx={{ color: scraperStatus?.is_running ? '#43a047' : '#e53935', fontWeight: 600 }}>
               {scraperStatus?.is_running ? 'Running' : 'Stopped'}
+            </Typography>
+          </Box>
+          {/* WebSocket connection status */}
+          <Box sx={{ display: 'flex', alignItems: 'center', ml: 2, gap: 1 }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: isConnected ? '#43a047' : '#e53935',
+                marginRight: 4,
+              }}
+            />
+            <Typography variant="caption" sx={{ color: isConnected ? '#43a047' : '#e53935', fontWeight: 600 }}>
+              {isConnected ? 'PTO WS' : 'PTO WS OFF'}
             </Typography>
           </Box>
         </Box>
