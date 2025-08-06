@@ -205,7 +205,8 @@ class PTOScraper:
         try:
             # Method 1: Look for the 'S' button in the top right as definitive login indicator
             try:
-                s_button = driver.find_element(By.XPATH, "//button[contains(@class, 'MuiButton-root') and .//p[text()='S']]")
+                # Updated XPath to look for 'S' in span element, not p element
+                s_button = driver.find_element(By.XPATH, "//button[contains(@class, 'MuiButton-root') and .//span[text()='S']]")
                 if s_button:
                     logger.info("'S' button found in top right, assuming logged in")
                     return True
@@ -466,22 +467,22 @@ class PTOScraper:
         """Switch to the Prop Builder tab"""
         wait = WebDriverWait(driver, timeout)
         try:
-            logger.info("[PROP-BUILDER] Attempting to switch to Prop Builder tab (old logic)")
+            logger.info("[PROP-BUILDER] Attempting to switch to Prop Builder tab")
             # Click the dropdown button (the one with the current tab name)
             dropdown_btn = wait.until(EC.element_to_be_clickable(
-                (By.XPATH, "//button[.//p[contains(text(), 'Default')] or .//p[contains(text(), 'Prop Builder')] or .//p[contains(text(), 'EV LIVE')] or .//p[contains(text(), 'LIVE PROPS')]]")
+                (By.XPATH, "//button[.//span[contains(text(), 'Default')] or .//span[contains(text(), 'Prop Builder')] or .//span[contains(text(), 'EV LIVE')] or .//span[contains(text(), 'LIVE PROPS')]]")
             ))
             logger.info("[PROP-BUILDER] Found dropdown button, clicking...")
             dropdown_btn.click()
             # Click the 'Prop Builder' option in the dropdown
             prop_builder_option = wait.until(EC.element_to_be_clickable(
-                (By.XPATH, "//li[.//p[contains(text(), 'Prop Builder')]]")
+                (By.XPATH, "//li[.//span[contains(text(), 'Prop Builder')]]")
             ))
             logger.info("[PROP-BUILDER] Found Prop Builder option, clicking...")
             prop_builder_option.click()
             # Wait for the Prop Builder tab to load (adjust selector as needed)
             wait.until(EC.visibility_of_element_located(
-                (By.XPATH, "//p[contains(text(), 'Prop Builder')]")
+                (By.XPATH, "//span[contains(text(), 'Prop Builder')]")
             ))
             logger.info("[PROP-BUILDER] Successfully switched to Prop Builder tab")
             return True
@@ -710,7 +711,7 @@ class PTOScraper:
     def is_on_prop_builder(self, driver):
         """Return True if currently on the Prop Builder tab"""
         try:
-            selected_tab = driver.find_element(By.XPATH, "//button[.//p[contains(text(), 'Prop Builder')] and contains(@class, 'Mui-selected')]")
+            selected_tab = driver.find_element(By.XPATH, "//button[.//span[contains(text(), 'Prop Builder')] and contains(@class, 'Mui-selected')]")
             return selected_tab is not None
         except Exception:
             return False
