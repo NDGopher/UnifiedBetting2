@@ -21,6 +21,9 @@ class PodEventManager:
         self._event_locks = defaultdict(threading.Lock)
         # Add async lock for async operations
         self._async_lock = asyncio.Lock()
+        # API performance tracking
+        self._api_success_count = 0
+        self._api_failure_count = 0
 
     def get_event_lock(self, event_id: str):
         return self._event_locks[event_id]
@@ -94,6 +97,16 @@ class PodEventManager:
                 if loop_count % 20 == 0:
                     logger.info(f"[BackgroundRefresher] Loop #{loop_count} - Processing {len(active_events)} active events")
                     print(f"[BackgroundRefresher] Loop #{loop_count} - Processing {len(active_events)} active events")
+                    
+                    # Track API performance metrics
+                    total_calls = self._api_success_count + self._api_failure_count
+                    if total_calls > 0:
+                        success_rate = (self._api_success_count / total_calls) * 100
+                        print(f"[BackgroundRefresher] API Performance: {success_rate:.1f}% success rate ({self._api_success_count}/{total_calls} calls)")
+                    
+                    # Reset counters every 20 loops
+                    self._api_success_count = 0
+                    self._api_failure_count = 0
                     
                     # FORCED CLEANUP: Remove any expired events that might have been missed
                     events_to_remove = []
@@ -213,8 +226,17 @@ class PodEventManager:
                             
                             if pinnacle_api_result and pinnacle_api_result.get("success"):
                                 print(f"[BackgroundRefresher] [SUCCESS] Pinnacle API call successful for {event_id}")
-                                # Process the new odds - use SAME pipeline as initial alert
-                                processed_odds = process_event_odds_for_display(pinnacle_api_result.get("data"))
+                                self._api_success_count += 1
+                            else:
+                                # API call failed - log error and move to next event immediately
+                                error_msg = pinnacle_api_result.get("error", "Unknown error") if pinnacle_api_result else "No response"
+                                print(f"[BackgroundRefresher] [FAILED] Pinnacle API call failed for {event_id}: {error_msg}")
+                                print(f"[BackgroundRefresher] [SKIP] Moving to next event immediately")
+                                self._api_failure_count += 1
+                                continue
+                            
+                            # Process the new odds - use SAME pipeline as initial alert
+                            processed_odds = process_event_odds_for_display(pinnacle_api_result.get("data"))
                                 
                                 # DEBUG: Log what Swordfish returned
                                 raw_data = pinnacle_api_result.get("data", {})
