@@ -57,6 +57,8 @@ class EventsResponse(RootModel[dict[str, EventData]]):
     pass
 
 app = FastAPI(title="Unified Betting App")
+# Readiness flag used by launcher health checks
+setattr(app.state, "ready", False)
 
 # Configure CORS
 app.add_middleware(
@@ -66,6 +68,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Lightweight health endpoint for launcher readiness checks
+@app.get("/healthz")
+async def healthz():
+    try:
+        return {"status": "ok", "ready": bool(getattr(app.state, "ready", False))}
+    except Exception:
+        # Never fail healthz
+        return {"status": "ok", "ready": False}
 
 # Load configuration
 import os
@@ -362,6 +373,11 @@ async def startup_event():
         logger.error(f"Failed to auto-start PTO scraper: {e}")
     
     logger.info("=====================================")
+    # Mark app as ready for launcher health check
+    try:
+        setattr(app.state, "ready", True)
+    except Exception:
+        pass
 
 @app.on_event("shutdown")
 async def shutdown_event():

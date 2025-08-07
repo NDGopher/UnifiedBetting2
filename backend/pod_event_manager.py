@@ -2,6 +2,7 @@ import time
 import threading
 import logging
 import copy
+import random
 from typing import Dict, Set, Any
 from pinnacle_fetcher import fetch_live_pinnacle_event_odds
 from utils import process_event_odds_for_display
@@ -21,9 +22,9 @@ class PodEventManager:
         self._event_locks = defaultdict(threading.Lock)
         # Add async lock for async operations
         self._async_lock = asyncio.Lock()
-        # API performance tracking
-        self._api_success_count = 0
-        self._api_failure_count = 0
+        # Per-event backoff state to avoid blocking and reduce API pressure
+        # Structure: { event_id: { 'attempts': int, 'next_ts': float } }
+        self._event_backoff_state: Dict[str, Dict[str, float]] = {}
 
     def get_event_lock(self, event_id: str):
         return self._event_locks[event_id]
@@ -98,16 +99,6 @@ class PodEventManager:
                     logger.info(f"[BackgroundRefresher] Loop #{loop_count} - Processing {len(active_events)} active events")
                     print(f"[BackgroundRefresher] Loop #{loop_count} - Processing {len(active_events)} active events")
                     
-                    # Track API performance metrics
-                    total_calls = self._api_success_count + self._api_failure_count
-                    if total_calls > 0:
-                        success_rate = (self._api_success_count / total_calls) * 100
-                        print(f"[BackgroundRefresher] API Performance: {success_rate:.1f}% success rate ({self._api_success_count}/{total_calls} calls)")
-                    
-                    # Reset counters every 20 loops
-                    self._api_success_count = 0
-                    self._api_failure_count = 0
-                    
                     # FORCED CLEANUP: Remove any expired events that might have been missed
                     events_to_remove = []
                     for event_id, event_data in active_events.items():
@@ -178,6 +169,13 @@ class PodEventManager:
                 
                 for event_id, event_data in active_events.items():
                     try:
+                        # Per-event backoff: skip events that are cooling down
+                        state = self._event_backoff_state.get(event_id, {"attempts": 0, "next_ts": 0.0})
+                        if current_time < state.get("next_ts", 0.0):
+                            remaining = state["next_ts"] - current_time
+                            print(f"[BackgroundRefresher] Event {event_id} in backoff for {remaining:.1f}s, skipping this cycle")
+                            continue
+
                         # Validate event data structure before processing
                         if not event_data or "pinnacle_data_processed" not in event_data or event_data["pinnacle_data_processed"] is None:
                             print(f"[BackgroundRefresher] Event {event_id} has corrupted data structure, removing...")
@@ -226,17 +224,8 @@ class PodEventManager:
                             
                             if pinnacle_api_result and pinnacle_api_result.get("success"):
                                 print(f"[BackgroundRefresher] [SUCCESS] Pinnacle API call successful for {event_id}")
-                                self._api_success_count += 1
-                            else:
-                                # API call failed - log error and move to next event immediately
-                                error_msg = pinnacle_api_result.get("error", "Unknown error") if pinnacle_api_result else "No response"
-                                print(f"[BackgroundRefresher] [FAILED] Pinnacle API call failed for {event_id}: {error_msg}")
-                                print(f"[BackgroundRefresher] [SKIP] Moving to next event immediately")
-                                self._api_failure_count += 1
-                                continue
-                            
-                            # Process the new odds - use SAME pipeline as initial alert
-                            processed_odds = process_event_odds_for_display(pinnacle_api_result.get("data"))
+                                # Process the new odds - use SAME pipeline as initial alert
+                                processed_odds = process_event_odds_for_display(pinnacle_api_result.get("data"))
                                 
                                 # DEBUG: Log what Swordfish returned
                                 raw_data = pinnacle_api_result.get("data", {})
@@ -257,15 +246,17 @@ class PodEventManager:
                                     print(f"  EV: {sample_market.get('ev', 'N/A')}")
                                     print(f"  BetBCK: {sample_market.get('betbck_odds', 'N/A')}")
                                 
+                                # Work on a deep copy to prevent cross-contamination across iterations
+                                working_event_data = copy.deepcopy(event_data)
                                 # Update the event data with new odds - ALWAYS update timestamp
-                                event_data["pinnacle_data_processed"] = processed_odds
-                                event_data["last_update"] = int(current_time)
-                                event_data["last_pinnacle_data_update_timestamp"] = int(current_time)
+                                working_event_data["pinnacle_data_processed"] = processed_odds
+                                working_event_data["last_update"] = int(current_time)
+                                working_event_data["last_pinnacle_data_update_timestamp"] = int(current_time)
                                 
                                 # Re-analyze markets for EV with fresh Pinnacle odds and existing BetBCK data
                                 try:
                                     from utils.pod_utils import analyze_markets_for_ev
-                                    betbck_data = event_data.get("betbck_data", {}).get("data", {})
+                                    betbck_data = working_event_data.get("betbck_data", {}).get("data", {})
                                     
                                     if betbck_data and processed_odds:
                                         print(f"[BackgroundRefresher] Re-analyzing markets for EV with fresh Pinnacle odds")
@@ -286,11 +277,11 @@ class PodEventManager:
                                         
                                         # Update the processed odds with fresh EV calculations
                                         processed_odds["markets"] = realistic_bets
-                                        event_data["pinnacle_data_processed"] = processed_odds
+                                        working_event_data["pinnacle_data_processed"] = processed_odds
                                         
                                         # NEW: Sync the fresh markets back to betbck_data so build_event_object uses them
-                                        if "betbck_data" in event_data and "data" in event_data["betbck_data"]:
-                                            event_data["betbck_data"]["data"]["potential_bets_analyzed"] = realistic_bets
+                                        if "betbck_data" in working_event_data and "data" in working_event_data["betbck_data"]:
+                                            working_event_data["betbck_data"]["data"]["potential_bets_analyzed"] = realistic_bets
                                             print(f"[BackgroundRefresher] Synced fresh markets to betbck_data for {event_id}")
                                         
                                         print(f"[BackgroundRefresher] Updated EV analysis: {len(realistic_bets)} realistic bets found")
@@ -355,7 +346,7 @@ class PodEventManager:
                                     # The broadcast function will call build_event_object internally
                                     try:
                                         print(f"[BackgroundRefresher] Broadcasting update for event {event_id}")
-                                        broadcast_function(event_id, event_data)
+                                        broadcast_function(event_id, working_event_data)
                                         print(f"[BackgroundRefresher] SUCCESS: Successfully broadcasted update for event {event_id}")
                                     except Exception as broadcast_error:
                                         print(f"[BackgroundRefresher] ERROR broadcasting for {event_id}: {broadcast_error}")
@@ -364,19 +355,34 @@ class PodEventManager:
                                 
                                 # Update the manager with the synced data (thread-safe) - ALWAYS persist
                                 self.update_event_data(event_id, {
-                                    "pinnacle_data_processed": processed_odds,
-                                    "betbck_data": event_data.get("betbck_data"),  # Include synced betbck_data if present
+                                    "pinnacle_data_processed": working_event_data.get("pinnacle_data_processed"),
+                                    "betbck_data": working_event_data.get("betbck_data"),
                                     "last_update": int(current_time),
                                     "last_pinnacle_data_update_timestamp": int(current_time)
                                 })
                                 print(f"[BackgroundRefresher] SUCCESS: Updated event data in manager for event {event_id}")
+
+                                # Reset backoff on success
+                                self._event_backoff_state[event_id] = {"attempts": 0, "next_ts": 0.0}
                             else:
                                 print(f"[BackgroundRefresher] [FAILED] Pinnacle API call failed for {event_id}: {pinnacle_api_result}")
+                                # Schedule per-event backoff on failure
+                                state = self._event_backoff_state.get(event_id, {"attempts": 0, "next_ts": 0.0})
+                                attempts = int(state.get("attempts", 0))
+                                delay = min(30.0, float(2 ** min(attempts, 4))) + random.uniform(0.1, 0.5)
+                                self._event_backoff_state[event_id] = {"attempts": attempts + 1, "next_ts": current_time + delay}
+                                print(f"[BackgroundRefresher] Backing off {delay:.1f}s for event {event_id} (attempts={attempts + 1})")
                                 continue
                                 
                         except Exception as e:
                             print(f"[BackgroundRefresher] Error processing event {event_id}: {e}")
                             logger.error(f"[BackgroundRefresher] Error processing event {event_id}: {e}")
+                            # Schedule per-event backoff on exception
+                            state = self._event_backoff_state.get(event_id, {"attempts": 0, "next_ts": 0.0})
+                            attempts = int(state.get("attempts", 0))
+                            delay = min(30.0, float(2 ** min(attempts, 4))) + random.uniform(0.1, 0.5)
+                            self._event_backoff_state[event_id] = {"attempts": attempts + 1, "next_ts": current_time + delay}
+                            print(f"[BackgroundRefresher] Backing off {delay:.1f}s for event {event_id} due to error (attempts={attempts + 1})")
                             
                     except Exception as e:
                         print(f"[BackgroundRefresher] Error in event loop for {event_id}: {e}")
