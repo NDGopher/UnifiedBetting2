@@ -652,16 +652,22 @@ def setup_frontend():
         
         print_status("✅ Frontend dependencies installed successfully", "SUCCESS", Colors.GREEN)
 
-def wait_for_backend(port=5001, timeout=30):
-    """Wait for backend to be ready"""
+def wait_for_backend_health(timeout=45):
+    """Wait for backend /healthz to report ready instead of raw socket connect"""
+    import urllib.request
     start_time = time.time()
+    url = "http://127.0.0.1:5001/healthz"
     while time.time() - start_time < timeout:
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect(('localhost', port))
-                return True
-        except:
-            time.sleep(0.5)
+            with urllib.request.urlopen(url, timeout=3) as resp:
+                if resp.status == 200:
+                    import json as _json
+                    data = _json.loads(resp.read().decode('utf-8'))
+                    if data.get("ready") is True:
+                        return True
+        except Exception:
+            pass
+        time.sleep(0.5)
     return False
 
 def launch_application():
@@ -806,6 +812,15 @@ def launch_application():
         except Exception as e:
             print_status(f"Warning: Could not clean up Chrome processes: {e}", "WARNING", Colors.YELLOW)
         
+        # Preflight: compile backend to catch syntax errors fast
+        try:
+            compile_result = run_command(f"{python_cmd} -m py_compile main.py pod_event_manager.py pinnacle_fetcher.py", cwd=backend_dir, silent=True)
+            if compile_result.wait() != 0:
+                raise Exception("Backend preflight compile failed")
+        except Exception as e:
+            print_status(f"Backend preflight failed: {e}", "ERROR", Colors.RED)
+            raise
+
         # Launch backend server
         print_status("🚀 Starting Backend (FastAPI/Uvicorn) on port 5001...", "INFO", Colors.CYAN)
         
@@ -931,24 +946,17 @@ def launch_application():
         backend_log_thread = threading.Thread(target=log_backend_output, daemon=True)
         backend_log_thread.start()
         
-        # Wait for backend to be ready
+        # Wait for backend health
         print_status("⏳ Waiting for backend to start...", "INFO", Colors.YELLOW)
         
         # Show progress while waiting
         start_time = time.time()
-        while time.time() - start_time < 30:
-            try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.connect(('localhost', 5001))
-                    print_status("Backend is ready!", "SUCCESS", Colors.GREEN)
-                    break
-            except:
-                elapsed = int(time.time() - start_time)
-                print(f"\r{Colors.YELLOW}[PROGRESS]{Colors.RESET} Waiting for backend... {elapsed}s", end='', flush=True)
-                time.sleep(0.5)
+        if wait_for_backend_health(timeout=45):
+            elapsed = int(time.time() - start_time)
+            print_status(f"Backend is ready in {elapsed}s!", "SUCCESS", Colors.GREEN)
         else:
             print()  # New line after progress
-            print_status("Backend failed to start within 30 seconds", "ERROR", Colors.RED)
+            print_status("Backend failed health check within 45 seconds", "ERROR", Colors.RED)
             backend_process.terminate()
             raise Exception("Backend startup timeout")
         
