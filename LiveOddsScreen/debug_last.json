@@ -1,0 +1,47 @@
+{
+  "counts": {
+    "pto": 0,
+    "plive": 7,
+    "betbck_iframe": 0,
+    "matches": 0,
+    "live_rows": 7
+  },
+  "sample_plive": [
+    {
+      "sport": "MLB",
+      "market": "total",
+      "home": "MiLB AAA",
+      "away": "Game",
+      "books": {
+        "betbck": {
+          "home": "+166",
+          "away": "-252"
+        }
+      }
+    },
+    {
+      "sport": "MLB",
+      "market": "total",
+      "home": "Game",
+      "away": "Game Winner",
+      "books": {
+        "betbck": {
+          "home": "+166",
+          "away": "-252"
+        }
+      }
+    },
+    {
+      "sport": "MLB",
+      "market": "moneyline",
+      "home": "Las Vegas Aviators",
+      "away": "Salt Lake Bees",
+      "books": {
+        "betbck": {
+          "home": "+166",
+          "away": "-252"
+        }
+      }
+    }
+  ]
+}
