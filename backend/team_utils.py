@@ -284,13 +284,13 @@ def match_betbck_to_pinnacle_markets(betbck_data, pinnacle_data):
         for spread in pin_spreads.values():
             try:
                 hdp = float(spread.get('hdp', 0))
-                if is_home and math.isclose(hdp, float(bck_line), abs_tol=0.01):
-                    return spread
-                if not is_home and math.isclose(hdp, -float(bck_line), abs_tol=0.01):
+                # Match the SAME sign for both home and away teams
+                if math.isclose(hdp, float(bck_line), abs_tol=0.01):
                     return spread
             except Exception:
                 continue
         return None
+    
     for spread in betbck.get('home_spreads', []):
         bck_line = spread.get('line')
         pin_spread = find_spread(pin_spreads, bck_line, True)
