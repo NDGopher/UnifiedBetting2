@@ -843,6 +843,9 @@ BUCKEYE_RESULTS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'buckeye_
 current_results = None
 last_run_time = None
 
+# Token storage - simple file-based storage for now
+TOKENS_FILE = os.path.join(os.path.dirname(__file__), 'data', 'user_tokens.json')
+
 @app.post("/api/run-pipeline")
 async def run_pipeline():
     """Run the Buckeye pipeline: scrape BetBCK, match/normalize, fetch Swordfish, calculate EV, output."""
@@ -1453,6 +1456,154 @@ async def debug_matching():
             "data": {}
         }
 
+def _load_tokens() -> Dict[str, Any]:
+    """Load tokens from file"""
+    try:
+        if not os.path.exists(TOKENS_FILE):
+            return {}
+        with open(TOKENS_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Error loading tokens: {e}")
+        return {}
+
+def _save_tokens(tokens: Dict[str, Any]) -> bool:
+    """Save tokens to file"""
+    try:
+        os.makedirs(os.path.dirname(TOKENS_FILE), exist_ok=True)
+        with open(TOKENS_FILE, 'w') as f:
+            json.dump(tokens, f, indent=2)
+        return True
+    except Exception as e:
+        logger.error(f"Error saving tokens: {e}")
+        return False
+
+@app.post("/api/tokens/save")
+async def save_user_tokens(request: Request):
+    """Save user tokens for bet placement"""
+    try:
+        data = await request.json()
+        tokens = data.get("tokens", {})
+        
+        # Validate required fields
+        required_fields = ["player_id", "prop_description", "game_id", "bet_type"]
+        for field in required_fields:
+            if field not in tokens:
+                return JSONResponse(
+                    status_code=400,
+                    content={"status": "error", "message": f"Missing required field: {field}"}
+                )
+        
+        # Load existing tokens and merge
+        existing_tokens = _load_tokens()
+        existing_tokens.update(tokens)
+        
+        # Save to file
+        if _save_tokens(existing_tokens):
+            logger.info(f"Saved tokens for user: {tokens.get('player_id', 'Unknown')}")
+            return JSONResponse({
+                "status": "success",
+                "message": "Tokens saved successfully"
+            })
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "Failed to save tokens"}
+            )
+    except Exception as e:
+        logger.error(f"Error saving tokens: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Error saving tokens: {str(e)}"}
+        )
+
+@app.get("/api/tokens/get")
+def get_user_tokens():
+    """Get stored user tokens"""
+    try:
+        tokens = _load_tokens()
+        return JSONResponse({
+            "status": "success",
+            "data": tokens
+        })
+    except Exception as e:
+        logger.error(f"Error getting tokens: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Error getting tokens: {str(e)}"}
+        )
+
+@app.post("/api/props/place-bet")
+async def place_prop_bet(request: Request):
+    """Place a prop bet using stored tokens"""
+    try:
+        data = await request.json()
+        bet_data = data.get("bet_data", {})
+        
+        # Load stored tokens
+        tokens = _load_tokens()
+        if not tokens:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "message": "No tokens found. Save tokens first."}
+            )
+        
+        # Validate bet data
+        required_fields = ["player_id", "prop_description", "game_id", "bet_type", "bet_amount", "odds"]
+        for field in required_fields:
+            if field not in bet_data:
+                return JSONResponse(
+                    status_code=400,
+                    content={"status": "error", "message": f"Missing required field: {field}"}
+                )
+        
+        # Here you would integrate with the actual betting API
+        # For now, just log and return success
+        logger.info(f"Placing prop bet: {bet_data}")
+        
+        # TODO: Integrate with actual betting API using tokens
+        # This is where you'd make the HTTP request to place the bet
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "Bet placement initiated",
+            "data": {
+                "bet_id": f"bet_{int(time.time())}",
+                "status": "pending"
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error placing prop bet: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Error placing bet: {str(e)}"}
+        )
+
+@app.get("/buckeye/health")
+def buckeye_health_check():
+    """Health check for Buckeye system"""
+    try:
+        results_path = os.path.join(os.path.dirname(__file__), 'data', 'buckeye_results.json')
+        file_exists = os.path.exists(results_path)
+        file_size = os.path.getsize(results_path) if file_exists else 0
+        file_mtime = os.path.getmtime(results_path) if file_exists else 0
+        
+        return JSONResponse({
+            "status": "success",
+            "data": {
+                "file_exists": file_exists,
+                "file_size": file_size,
+                "file_modified": datetime.fromtimestamp(file_mtime).isoformat() if file_mtime else None,
+                "current_time": datetime.now().isoformat()
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error in health check: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
 @app.get("/buckeye/results")
 def get_buckeye_results():
     """Serve the latest BuckeyeScraper EV results from buckeye_results.json for frontend table population."""
@@ -1468,32 +1619,74 @@ def get_buckeye_results():
             data = json.load(f)
         events = data.get("events", [])
         last_update = data.get("last_run")
-        # Map to frontend columns
+        
+        # Debug logging
+        logger.info(f"[BUCKEYE-RESULTS] Raw data keys: {list(data.keys())}")
+        logger.info(f"[BUCKEYE-RESULTS] Events count: {len(events)}")
+        if events:
+            logger.info(f"[BUCKEYE-RESULTS] First event keys: {list(events[0].keys())}")
+            logger.info(f"[BUCKEYE-RESULTS] First event sample: {events[0]}")
+        
+        # Map to frontend columns - handle new data structure from calculate_ev_table
         all_markets = []
-        for event in events:
-            home_team = event.get("event", "").split(" vs ")[0] if " vs " in event.get("event", "") else event.get("event", "")
-            away_team = event.get("event", "").split(" vs ")[1] if " vs " in event.get("event", "") else ""
-            league = event.get("league", "")
-            for market in [event]:  # Each event is already a market row
-                all_markets.append({
-                    "matchup": f"{home_team} vs {away_team}",
-                    "league": league,
-                    "bet": market.get('bet', ''),
-                    "betbck_odds": market.get("betbck_odds", ""),
-                    "pinnacle_nvp": market.get("pin_nvp", ""),
-                    "ev": market.get("ev", ""),
-                    "start_time": market.get("start_time", ""),
-                    "pinnacle_limit": market.get("max_bet")
-                })
+        for i, event in enumerate(events):
+            # New structure: each event is already a market row with all fields
+            # Extract team names from the 'event' field which contains "Team A vs Team B"
+            event_name = event.get("event", "")
+            home_team = ""
+            away_team = ""
+            
+            if " vs " in event_name:
+                parts = event_name.split(" vs ")
+                home_team = parts[0].strip()
+                away_team = parts[1].strip() if len(parts) > 1 else ""
+            else:
+                # Fallback if no " vs " found
+                home_team = event_name
+                away_team = ""
+            
+            # Debug logging for first few events
+            if i < 3:
+                logger.info(f"[BUCKEYE-RESULTS] Processing event {i}: event_name='{event_name}', home='{home_team}', away='{away_team}'")
+                logger.info(f"[BUCKEYE-RESULTS] Event {i} fields: {list(event.keys())}")
+            
+            # Map the new field names to what frontend expects
+            mapped_market = {
+                "matchup": f"{home_team} vs {away_team}" if away_team else home_team,
+                "league": event.get("league", ""),
+                "bet": event.get('bet', ''),
+                "betbck_odds": event.get("betbck_odds", ""),
+                "pinnacle_nvp": event.get("pin_nvp", ""),  # Map pin_nvp to pinnacle_nvp
+                "ev": event.get("ev", ""),
+                "start_time": event.get("start_time", ""),
+                "pinnacle_limit": event.get("max_bet")
+            }
+            
+            if i < 3:
+                logger.info(f"[BUCKEYE-RESULTS] Mapped market {i}: {mapped_market}")
+            
+            all_markets.append(mapped_market)
+        
+        logger.info(f"[BUCKEYE-RESULTS] Processed {len(all_markets)} markets from {len(events)} events")
+        
+        # Validate the mapped data
+        if all_markets:
+            sample_market = all_markets[0]
+            logger.info(f"[BUCKEYE-RESULTS] Sample market keys: {list(sample_market.keys())}")
+            logger.info(f"[BUCKEYE-RESULTS] Sample market: {sample_market}")
+        
         return JSONResponse({
             "status": "success",
             "data": {
                 "markets": all_markets,
-                "last_update": last_update
+                "last_update": last_update,
+                "total_markets": len(all_markets)
             }
         })
     except Exception as e:
         logger.error(f"Error getting BuckeyeScraper results: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)}

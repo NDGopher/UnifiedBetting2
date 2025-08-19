@@ -463,51 +463,79 @@ def _analyze_period_markets(bet_data: Dict, period_data: Dict, pin_data: Dict, p
             })
     
     # --- Spread Analysis ---
+    def _find_matching_pin_spread(spreads_dict: Dict, target_line_str: str, invert_for_away: bool = False) -> Optional[Dict]:
+        try:
+            base_val = float(str(target_line_str).replace('+', '')) if str(target_line_str).startswith('+') else float(str(target_line_str))
+        except Exception:
+            return None
+        target_val = -base_val if invert_for_away else base_val
+        # Iterate through spreads and match by explicit hdp (preferred) or by key-parsed float
+        for key, spread in spreads_dict.items():
+            candidate = None
+            try:
+                if isinstance(spread, dict) and 'hdp' in spread and spread['hdp'] is not None:
+                    candidate = float(spread['hdp'])
+                else:
+                    # Fallback: try to use the dict key as the number
+                    candidate = float(str(key))
+            except Exception:
+                continue
+            # Sign-sensitive comparison (do NOT use abs); require same sign and value within tolerance
+            if math.isclose(candidate, target_val, abs_tol=0.01):
+                return spread
+        return None
+
     if bet_data.get('home_spreads') and period_data.get('spreads'):
         for s in bet_data['home_spreads']:
             line = s.get('line')
-            if line and str(line) in period_data['spreads']:
-                pin_spread = period_data['spreads'][str(line)]
-                bet_odds = american_to_decimal(s.get('odds'))
-                true_odds = pin_spread.get('nvp_home')
-                if bet_odds and true_odds:
-                    ev = calculate_ev(bet_odds, true_odds)
-                    potential_bets.append({
-                        'market': 'Spread',
-                        'selection': 'Home',
-                        'line': str(line),
-                        'pinnacle_nvp': pin_spread.get('nvp_american_home', 'N/A'),
-                        'pinnacle_limit': pin_spread.get('max') or meta_limits.get('max_spread'),
-                        'betbck_odds': s.get('odds'),
-                        'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
-                        'home_team': home_team,
-                        'away_team': away_team,
-                        'bet': format_bet_description('Spread', 'Home', str(line), home_team, away_team),
-                        'period': period_name
-                    })
-    
+            if not line:
+                continue
+            pin_spread = _find_matching_pin_spread(period_data['spreads'], str(line), invert_for_away=False)
+            if not pin_spread:
+                continue
+            bet_odds = american_to_decimal(s.get('odds'))
+            true_odds = pin_spread.get('nvp_home')
+            if bet_odds and true_odds:
+                ev = calculate_ev(bet_odds, true_odds)
+                potential_bets.append({
+                    'market': 'Spread',
+                    'selection': 'Home',
+                    'line': str(line),
+                    'pinnacle_nvp': pin_spread.get('nvp_american_home', 'N/A'),
+                    'pinnacle_limit': pin_spread.get('max') or meta_limits.get('max_spread'),
+                    'betbck_odds': s.get('odds'),
+                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'bet': format_bet_description('Spread', 'Home', str(line), home_team, away_team),
+                    'period': period_name
+                })
+
     if bet_data.get('away_spreads') and period_data.get('spreads'):
         for s in bet_data['away_spreads']:
             line = s.get('line')
-            if line and str(line) in period_data['spreads']:
-                pin_spread = period_data['spreads'][str(line)]
-                bet_odds = american_to_decimal(s.get('odds'))
-                true_odds = pin_spread.get('nvp_away')
-                if bet_odds and true_odds:
-                    ev = calculate_ev(bet_odds, true_odds)
-                    potential_bets.append({
-                        'market': 'Spread',
-                        'selection': 'Away',
-                        'line': str(line),
-                        'pinnacle_nvp': pin_spread.get('nvp_american_away', 'N/A'),
-                        'pinnacle_limit': pin_spread.get('max') or meta_limits.get('max_spread'),
-                        'betbck_odds': s.get('odds'),
-                        'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
-                        'home_team': home_team,
-                        'away_team': away_team,
-                        'bet': format_bet_description('Spread', 'Away', str(line), home_team, away_team),
-                        'period': period_name
-                    })
+            if not line:
+                continue
+            pin_spread = _find_matching_pin_spread(period_data['spreads'], str(line), invert_for_away=True)
+            if not pin_spread:
+                continue
+            bet_odds = american_to_decimal(s.get('odds'))
+            true_odds = pin_spread.get('nvp_away')
+            if bet_odds and true_odds:
+                ev = calculate_ev(bet_odds, true_odds)
+                potential_bets.append({
+                    'market': 'Spread',
+                    'selection': 'Away',
+                    'line': str(line),
+                    'pinnacle_nvp': pin_spread.get('nvp_american_away', 'N/A'),
+                    'pinnacle_limit': pin_spread.get('max') or meta_limits.get('max_spread'),
+                    'betbck_odds': s.get('odds'),
+                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'bet': format_bet_description('Spread', 'Away', str(line), home_team, away_team),
+                    'period': period_name
+                })
     
     # --- Total Analysis ---
     # Only process totals if both BetBCK and Pinnacle have the data
