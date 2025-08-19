@@ -1,0 +1,132 @@
+{
+  "rows": [
+    {
+      "mode": "team",
+      "sport": "MLB",
+      "market": "moneyline",
+      "team": "Streaming now",
+      "opponent": "Mexico LMB",
+      "side": "home",
+      "best": "betbck -186",
+      "avg": -186.0,
+      "books": {
+        "betbck": {
+          "home": "-186",
+          "away": "+127"
+        }
+      }
+    },
+    {
+      "mode": "team",
+      "sport": "MLB",
+      "market": "moneyline",
+      "team": "Mexico LMB",
+      "opponent": "Streaming now",
+      "side": "away",
+      "best": "betbck +127",
+      "avg": 127.0,
+      "books": {
+        "betbck": {
+          "home": "-186",
+          "away": "+127"
+        }
+      }
+    },
+    {
+      "mode": "team",
+      "sport": "MLB",
+      "market": "moneyline",
+      "team": "Mexico LMB",
+      "opponent": "El \u00c1guila de Veracruz",
+      "side": "home",
+      "best": "betbck -186",
+      "avg": -186.0,
+      "books": {
+        "betbck": {
+          "home": "-186",
+          "away": "+127"
+        }
+      }
+    },
+    {
+      "mode": "team",
+      "sport": "MLB",
+      "market": "moneyline",
+      "team": "El \u00c1guila de Veracruz",
+      "opponent": "Mexico LMB",
+      "side": "away",
+      "best": "betbck +127",
+      "avg": 127.0,
+      "books": {
+        "betbck": {
+          "home": "-186",
+          "away": "+127"
+        }
+      }
+    },
+    {
+      "mode": "team",
+      "sport": "MLB",
+      "market": "moneyline",
+      "team": "El \u00c1guila de Veracruz",
+      "opponent": "Guerreros de Oaxaca",
+      "side": "home",
+      "best": "betbck -186",
+      "avg": -186.0,
+      "books": {
+        "betbck": {
+          "home": "-186",
+          "away": "+127"
+        }
+      }
+    },
+    {
+      "mode": "team",
+      "sport": "MLB",
+      "market": "moneyline",
+      "team": "Guerreros de Oaxaca",
+      "opponent": "El \u00c1guila de Veracruz",
+      "side": "away",
+      "best": "betbck +127",
+      "avg": 127.0,
+      "books": {
+        "betbck": {
+          "home": "-186",
+          "away": "+127"
+        }
+      }
+    },
+    {
+      "mode": "team",
+      "sport": "MLB",
+      "market": "moneyline",
+      "team": "Tecolotes de los Dos Laredos",
+      "opponent": "Acereros de Monclova",
+      "side": "home",
+      "best": "betbck +107",
+      "avg": 107.0,
+      "books": {
+        "betbck": {
+          "home": "+107",
+          "away": "-155"
+        }
+      }
+    },
+    {
+      "mode": "team",
+      "sport": "MLB",
+      "market": "moneyline",
+      "team": "Acereros de Monclova",
+      "opponent": "Tecolotes de los Dos Laredos",
+      "side": "away",
+      "best": "betbck -155",
+      "avg": -155.0,
+      "books": {
+        "betbck": {
+          "home": "+107",
+          "away": "-155"
+        }
+      }
+    }
+  ]
+}

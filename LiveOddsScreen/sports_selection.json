@@ -1,0 +1,10 @@
+{
+  "selections": [
+    "mlb:moneyline"
+  ],
+  "opts": {
+    "open_browser": "embedded",
+    "pto_headless": true,
+    "chrome_debug_port": null
+  }
+}

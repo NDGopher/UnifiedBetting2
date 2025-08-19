@@ -16,6 +16,10 @@ class EventOdds:
     away: str
     # book -> {"home": price, "away": price}
     books: Dict[str, Dict[str, Optional[str]]] = field(default_factory=dict)
+    # For markets that need a reference value (e.g., total number or spread handicap)
+    line: Optional[str] = None
+    # Optional: source PTO URL for quick-launch in UI
+    pto_url: Optional[str] = None
 
     def best_side(self) -> Dict[str, Optional[str]]:
         # Determine which book has the best price for each side (home/away) in American odds

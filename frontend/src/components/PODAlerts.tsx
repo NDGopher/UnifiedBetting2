@@ -32,6 +32,7 @@ interface Market {
   pinnacle_nvp: string;
   betbck_odds: string;
   ev: string;
+  period?: string; // Added for period display
 }
 
 interface EventData {
@@ -442,6 +443,12 @@ const PODAlerts: React.FC = () => {
                               if (market.selection === 'Home') selectionDisplay = homeTeam;
                               else if (market.selection === 'Away') selectionDisplay = awayTeam;
                             }
+                            
+                            // Add period prefix to selection display for first half markets
+                            if (market.period === 'First Half') {
+                              selectionDisplay = `1H ${selectionDisplay}`;
+                            }
+                            
                             let evDisplay = market.ev;
                             if (!evDisplay.startsWith('-') && !evDisplay.startsWith('0') && !evDisplay.startsWith('+')) {
                               evDisplay = '+' + evDisplay;
@@ -454,6 +461,7 @@ const PODAlerts: React.FC = () => {
                             } else if (market.market.toLowerCase().includes('spread') && market.line && !market.line.startsWith('-') && !market.line.startsWith('+')) {
                               lineDisplay = `+${market.line}`;
                             }
+                            
                             return (
                               <TableRow
                                 key={idx}

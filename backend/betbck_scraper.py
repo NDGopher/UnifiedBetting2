@@ -331,6 +331,16 @@ def parse_specific_game_from_search_html(html_content, target_home_team_pod, tar
     norm_pod_a = normalize_team_name_for_matching(target_away_team_pod)
     print(f"[BetbckParser] Normalized POD Targets: Home='{norm_pod_h}', Away='{norm_pod_a}' (Event ID: {event_id})")
 
+    # Initialize result structure
+    result_data = {
+        "source": "betbck.com",
+        "pod_home_team": target_home_team_pod,
+        "pod_away_team": target_away_team_pod,
+        "full_game": None,
+        "first_half": None
+    }
+
+    # Process each game wrapper to find both full game and 1H lines
     for idx, game_wrapper_table in enumerate(game_wrappers):
         team_name_td = game_wrapper_table.find('td', class_=lambda x: x and x.startswith('tbl_betAmount_team1_main_name'))
         if not team_name_td: continue
@@ -339,13 +349,41 @@ def parse_specific_game_from_search_html(html_content, target_home_team_pod, tar
         raw_bck_l, raw_bck_v = get_cleaned_team_name_from_div(div_t1), get_cleaned_team_name_from_div(div_t2)
         if not raw_bck_l or not raw_bck_v: print(f"[BetbckParser] Wrapper {idx}: Empty raw names. L='{raw_bck_l}', V='{raw_bck_v}' (Event ID: {event_id})"); continue
         
-        skip_indicators = ["1H", "1st Half", "First Half", "1st 5 Innings", "First Five Innings", "1st Period", "2nd Period", "3rd Period", "hits+runs+errors", "h+r+e", "hre", "corners", "series"]
+        # Check if this is a 1H line or full game line
+        is_first_half = any(ind.lower() in raw_bck_l.lower() or ind.lower() in raw_bck_v.lower() 
+                           for ind in ["1h", "1st half", "first half"])
+        
+        # Skip other prop types but allow 1H - comprehensive list of period-based and prop lines
+        skip_indicators = [
+            # Baseball periods
+            "1st 5 Innings", "First Five Innings", 
+            # Hockey periods
+            "1st Period", "2nd Period", "3rd Period", 
+            # Basketball/Football quarters
+            "1Q", "2Q", "3Q", "4Q", "1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter",
+            # Other halves (not 1H)
+            "2nd Half", "3rd Half", "4th Half",
+            # Soccer/Baseball props
+            "hits+runs+errors", "h+r+e", "hre", "corners", "bookings", "cards", "fouls",
+            # Other props
+            "series", "overtime", "extra time", "penalties", "sets", "games"
+        ]
         if any(ind.lower() in raw_bck_l.lower() for ind in skip_indicators) or \
            any(ind.lower() in raw_bck_v.lower() for ind in skip_indicators):
             print(f"[BetbckParser] Skipping non-full game/prop: {raw_bck_l} vs {raw_bck_v} (Event ID: {event_id})"); continue
             
-        norm_bck_l, norm_bck_v = normalize_team_name_for_matching(raw_bck_l), normalize_team_name_for_matching(raw_bck_v)
-        print(f"[BetbckParser] Comparing POD: H='{norm_pod_h}' A='{norm_pod_a}' WITH BCK {idx}: L='{norm_bck_l}' V='{norm_bck_v}' (Raw: L='{raw_bck_l}', V='{raw_bck_v}') (Event ID: {event_id})")
+        # For 1H lines, we need to check if the base team names match (without 1H suffix)
+        if is_first_half:
+            # Remove 1H suffix for team matching
+            base_bck_l = re.sub(r'\s*1h\s*$', '', raw_bck_l, flags=re.IGNORECASE).strip()
+            base_bck_v = re.sub(r'\s*1h\s*$', '', raw_bck_v, flags=re.IGNORECASE).strip()
+            norm_bck_l = normalize_team_name_for_matching(base_bck_l)
+            norm_bck_v = normalize_team_name_for_matching(base_bck_v)
+        else:
+            norm_bck_l = normalize_team_name_for_matching(raw_bck_l)
+            norm_bck_v = normalize_team_name_for_matching(raw_bck_v)
+        
+        print(f"[BetbckParser] Comparing POD: H='{norm_pod_h}' A='{norm_pod_a}' WITH BCK {idx}: L='{norm_bck_l}' V='{norm_bck_v}' (Raw: L='{raw_bck_l}', V='{raw_bck_v}') {'[1H]' if is_first_half else '[Full Game]'} (Event ID: {event_id})")
         matched, bck_local_is_pod_home = False, False
 
         if norm_pod_h == norm_bck_l and norm_pod_a == norm_bck_v: matched, bck_local_is_pod_home = True, True; print(f"[BetbckParser] Exact Match (Order 1) for {raw_bck_l} vs {raw_bck_v} (Event ID: {event_id})")
@@ -399,7 +437,7 @@ def parse_specific_game_from_search_html(html_content, target_home_team_pod, tar
         
         if not matched: continue
         
-        print(f"[BetbckParser] Game Matched! BetBCK Local is POD Home: {bck_local_is_pod_home}. Parsing odds... (Event ID: {event_id})")
+        print(f"[BetbckParser] Game Matched! BetBCK Local is POD Home: {bck_local_is_pod_home}. Parsing odds... {'[1H]' if is_first_half else '[Full Game]'} (Event ID: {event_id})")
         odds_table = game_wrapper_table.find('table', class_='new_tb_cont')
         if not odds_table: print(f"[BetbckParser] No 'new_tb_cont' odds table for game {idx}. (Event ID: {event_id})"); continue
         
@@ -418,7 +456,7 @@ def parse_specific_game_from_search_html(html_content, target_home_team_pod, tar
         a_cells = tds_bck_displayed_visitor_row if bck_local_is_pod_home else tds_bck_displayed_local_row
 
         # --- Ensure Set Spread and Moneyline are always parsed for tennis ---
-        # The following odds parsing block will extract all available spreads and moneylines, including tennis Set Spread and Moneyline.
+        # The following odds parsing block will extract all available spreads and moneylines, including tennis Set Spread/Moneyline for tennis.
         print(f"[BetbckParser] Parsing all spreads and moneylines (including Set Spread/Moneyline for tennis) (Event ID: {event_id})")
         if len(h_cells)>0: output_data["home_spreads"]=extract_all_spread_options_from_text(h_cells[0])
         if len(a_cells)>0: output_data["away_spreads"]=extract_all_spread_options_from_text(a_cells[0])
@@ -436,16 +474,39 @@ def parse_specific_game_from_search_html(html_content, target_home_team_pod, tar
         
         if len(h_cells)>3: txt_el=h_cells[3];_and_True = "o" in txt_el.get_text(" ",strip=True).lower() and (output_data.update({"home_team_total_over_line":extract_line_value_from_text(txt_el,"Total"), "home_team_total_over_odds":extract_american_odds_from_text(txt_el)}))
         if len(h_cells)>4: txt_el=h_cells[4];_and_True = "u" in txt_el.get_text(" ",strip=True).lower() and (output_data.update({"home_team_total_under_line":extract_line_value_from_text(txt_el,"Total"), "home_team_total_under_odds":extract_american_odds_from_text(txt_el)}))
-        if len(a_cells)>3: txt_el=a_cells[3];_and_True = "o" in txt_el.get_text(" ",strip=True).lower() and (output_data.update({"away_team_total_over_line":extract_line_value_from_text(txt_el,"Total"), "away_team_total_over_odds":extract_american_odds_from_text(txt_el)}))
+        if len(a_cells)>3: txt_el=a_cells[3];_and_True = "o" in txt_el.get_text(" ",strip=True).lower() and (output_data.update({"away_team_total_over_line":extract_line_value_from_text(txt_el,"Total"), "away_team_total_under_odds":extract_american_odds_from_text(txt_el)}))
         if len(a_cells)>4: txt_el=a_cells[4];_and_True = "u" in txt_el.get_text(" ",strip=True).lower() and (output_data.update({"away_team_total_under_line":extract_line_value_from_text(txt_el,"Total"), "away_team_total_under_odds":extract_american_odds_from_text(txt_el)}))
         
         if len(data_rows)>2 and "draw" in data_rows[2].get_text(strip=True).lower():
             tds_draw = data_rows[2].find_all('td',class_=lambda x:x and 'tbl_betAmount_td' in x)
             if len(tds_draw)>1: output_data["draw_moneyline_american"]=extract_american_odds_from_text(tds_draw[1])
         
-        if matched:
-            return output_data
-    print(f"[BetbckParser] No game matching POD teams found after all wrappers. (Event ID: {event_id})"); return None
+        # Store the parsed data in the appropriate section
+        if is_first_half:
+            result_data["first_half"] = output_data
+            print(f"[BetbckParser] 1H data parsed and stored (Event ID: {event_id})")
+        else:
+            result_data["full_game"] = output_data
+            print(f"[BetbckParser] Full game data parsed and stored (Event ID: {event_id})")
+    
+    # Return the combined result
+    if result_data["full_game"] or result_data["first_half"]:
+        print(f"[BetbckParser] Returning combined data - Full Game: {'Yes' if result_data['full_game'] else 'No'}, 1H: {'Yes' if result_data['first_half'] else 'No'} (Event ID: {event_id})")
+        
+        # Ensure we always have at least one valid data structure
+        if not result_data["full_game"] and result_data["first_half"]:
+            print(f"[BetbckParser] Only 1H data found, setting as full_game for backward compatibility (Event ID: {event_id})")
+            result_data["full_game"] = result_data["first_half"]
+            result_data["first_half"] = None
+        elif result_data["full_game"] and not result_data["first_half"]:
+            print(f"[BetbckParser] Only full game data found (Event ID: {event_id})")
+        elif result_data["full_game"] and result_data["first_half"]:
+            print(f"[BetbckParser] Both full game and 1H data found (Event ID: {event_id})")
+        
+        return result_data
+    else:
+        print(f"[BetbckParser] No game matching POD teams found after all wrappers. (Event ID: {event_id})")
+        return None
 
 def parse_game_data_from_html(search_results_html, search_term):
     """
@@ -562,6 +623,83 @@ def extract_last_name(full_name):
     if len(parts) > 1 and len(parts[-1]) == 1:
         return parts[-2].lower()
     return parts[-1].lower() 
+
+def extract_jwt_token_from_propbuilder():
+    """Extract JWT token from BetBCK PropBuilder page - ONLY when requested."""
+    print(f"[BetbckScraper] Manual token extraction requested...")
+    session = requests.Session()
+    
+    if not login_to_betbck(session):
+        print("[BetbckScraper] Login failed for token extraction.")
+        return None
+        
+    try:
+        # Access the PropBuilder page where JWT tokens are typically found
+        propbuilder_url = "https://betbck.com/Qubic/propbuilder.php"
+        print(f"[BetbckScraper] Accessing PropBuilder page to extract JWT token...")
+        
+        response = session.get(propbuilder_url, headers=BASE_HEADERS, timeout=20)
+        response.raise_for_status()
+        
+        # Look for JWT tokens in the page source
+        import re
+        jwt_patterns = [
+            r'token["\']?\s*[:=]\s*["\']([^"\']+)["\']',  # token: "eyJ..."
+            r'"token"\s*:\s*"([^"]+)"',  # "token": "eyJ..."
+            r'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+',  # Direct JWT pattern
+            r'Bearer\s+([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)',  # Bearer token
+        ]
+        
+        for pattern in jwt_patterns:
+            matches = re.findall(pattern, response.text, re.IGNORECASE)
+            for match in matches:
+                if match.startswith('eyJ'):  # JWT tokens start with 'eyJ'
+                    print(f"[BetbckScraper] Found JWT token: {match[:20]}...")
+                    
+                    # Also try to extract user info
+                    user_patterns = [
+                        r'user["\']?\s*[:=]\s*["\']([^"\']+)["\']',
+                        r'"user"\s*:\s*"([^"]+)"',
+                    ]
+                    
+                    user_info = None
+                    for user_pattern in user_patterns:
+                        user_matches = re.findall(user_pattern, response.text, re.IGNORECASE)
+                        if user_matches:
+                            user_info = user_matches[0]
+                            break
+                    
+                    return {
+                        'token': match,
+                        'user': user_info or 'unknown',
+                        'group': 'bb',  # Default group
+                        'extracted_at': time.time(),
+                        'expires_in': 3600  # Assume 1 hour expiry
+                    }
+        
+        # Also check URL parameters for tokens
+        from urllib.parse import urlparse, parse_qs
+        parsed_url = urlparse(response.url)
+        query_params = parse_qs(parsed_url.query)
+        
+        if 'token' in query_params:
+            token = query_params['token'][0]
+            if token.startswith('eyJ'):
+                print(f"[BetbckScraper] Found JWT token in URL: {token[:20]}...")
+                return {
+                    'token': token,
+                    'user': query_params.get('user', ['unknown'])[0],
+                    'group': query_params.get('group', ['bb'])[0],
+                    'extracted_at': time.time(),
+                    'expires_in': 3600
+                }
+        
+        print("[BetbckScraper] No JWT token found in PropBuilder page")
+        return None
+        
+    except Exception as e:
+        print(f"[BetbckScraper] Error extracting JWT token: {e}")
+        return None
 
 def scrape_all_betbck_games():
     """Scrape all games and lines from the BetBCK main board after login."""

@@ -1,0 +1,46 @@
+{
+  "counts": {
+    "pto": 0,
+    "plive": 6,
+    "matches": 0,
+    "live_rows": 6
+  },
+  "sample_plive": [
+    {
+      "sport": "NFL",
+      "market": "total",
+      "home": "MLB",
+      "away": "Game",
+      "books": {
+        "betbck": {
+          "home": "+250",
+          "away": "-349"
+        }
+      }
+    },
+    {
+      "sport": "NFL",
+      "market": "total",
+      "home": "Game",
+      "away": "Game Winner",
+      "books": {
+        "betbck": {
+          "home": "+250",
+          "away": "-349"
+        }
+      }
+    },
+    {
+      "sport": "NFL",
+      "market": "moneyline",
+      "home": "Chicago Cubs",
+      "away": "St. Louis Cardinals",
+      "books": {
+        "betbck": {
+          "home": "+250",
+          "away": "-349"
+        }
+      }
+    }
+  ]
+}

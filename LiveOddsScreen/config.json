@@ -1,0 +1,14 @@
+{
+  "chrome_user_data_dir": "C:\\Users\\steph\\AppData\\Local\\PTO_Chrome_Profile",
+  "chrome_profile_dir": "Profile 1",
+  "chrome_debug_port": 9223,
+  "timeouts": {
+    "page_load": 10
+  },
+  "speed_mode": true,
+  "fast_refresh": 0.1,
+  "use_websocket": true,
+  "use_pto_dom": true,
+  "pto_headless": true,
+  "plive_headless": true
+}

@@ -11,7 +11,8 @@ import time
 import threading
 import traceback
 from pod_event_manager import PodEventManager
-from main_logic import process_alert_and_scrape_betbck, analyze_markets_for_ev
+from main_logic import process_alert_and_scrape_betbck
+from utils.pod_utils import analyze_markets_for_ev
 from odds_processing import fetch_live_pinnacle_event_odds
 from utils import process_event_odds_for_display
 import copy
@@ -1256,7 +1257,8 @@ def build_event_object(event_id, entry):
             "line": line,
             "pinnacle_nvp": str(latest_nvp) if latest_nvp != "N/A" else "N/A",
             "betbck_odds": str(betbck_odds) if betbck_odds != "N/A" else "N/A",
-            "ev": ev_display
+            "ev": ev_display,
+            "period": bet.get("period", "Full Game")  # Preserve the period field
         })
     display_home = pinnacle_data.get('home', home_team)
     display_away = pinnacle_data.get('away', away_team)
@@ -1480,7 +1482,8 @@ def get_buckeye_results():
                     "betbck_odds": market.get("betbck_odds", ""),
                     "pinnacle_nvp": market.get("pin_nvp", ""),
                     "ev": market.get("ev", ""),
-                    "start_time": market.get("start_time", "")
+                    "start_time": market.get("start_time", ""),
+                    "pinnacle_limit": market.get("max_bet")
                 })
         return JSONResponse({
             "status": "success",
@@ -1736,6 +1739,188 @@ async def cleanup_expired_events():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+# ============================================================================
+# TOKEN MANAGEMENT ENDPOINTS - Integrated into main backend
+# ============================================================================
+
+# Import token manager
+from token_manager import token_manager
+
+@app.get("/api/token/status")
+async def get_token_status():
+    """Get current token status."""
+    try:
+        status = token_manager.get_status()
+        return {
+            'success': True,
+            'status': status
+        }
+    except Exception as e:
+        logger.error(f"Error getting token status: {e}")
+        return {
+            'success': False,
+            'message': f'Error getting token status: {str(e)}'
+        }
+
+@app.post("/api/token/refresh")
+async def refresh_token(request: Request):
+    """Refresh token from BetBCK scraper."""
+    try:
+        data = await request.json() if hasattr(request, 'json') else {}
+        force_refresh = data.get('force_refresh', False) if isinstance(data, dict) else False
+        
+        logger.info(f"Token refresh requested (force: {force_refresh})")
+        
+        token_data = token_manager.get_token(force_refresh=force_refresh)
+        
+        if token_data:
+            return {
+                'success': True,
+                'message': 'Token obtained successfully',
+                'token_data': token_data
+            }
+        else:
+            return {
+                'success': False,
+                'message': 'Failed to extract token from BetBCK'
+            }
+            
+    except Exception as e:
+        logger.error(f"Error during token refresh: {e}")
+        return {
+            'success': False,
+            'message': f'Server error: {str(e)}'
+        }
+
+@app.post("/api/token/validate")
+async def validate_token(request: Request):
+    """Validate if a token is still good."""
+    try:
+        data = await request.json() if hasattr(request, 'json') else {}
+        error_response = data.get('error_response', '') if isinstance(data, dict) else ''
+        
+        # Check if error suggests token expiry
+        fresh_token = token_manager.handle_api_error(error_response)
+        
+        if fresh_token:
+            return {
+                'success': True,
+                'message': 'Token refreshed due to API error',
+                'token_data': fresh_token
+            }
+        else:
+            return {
+                'success': False,
+                'message': 'Error not related to token expiry'
+            }
+            
+    except Exception as e:
+        logger.error(f"Validation error: {e}")
+        return {
+            'success': False,
+            'message': f'Validation error: {str(e)}'
+        }
+
+# ============================================================================
+# BET PLACEMENT ENDPOINTS - Enhanced with success/failure tracking
+# ============================================================================
+
+@app.post("/api/bet/place")
+async def place_bet(request: Request):
+    """Place a bet with enhanced success/failure tracking."""
+    try:
+        data = await request.json() if hasattr(request, 'json') else {}
+        
+        # Extract bet data
+        bet_data = data.get('bet_data', {})
+        wager_amount = data.get('wager_amount', 0)
+        current_odds = data.get('current_odds', 0)
+        
+        logger.info(f"Bet placement requested: ${wager_amount} at {current_odds} odds")
+        
+        # Validate bet data
+        if not bet_data or wager_amount <= 0:
+            return {
+                'success': False,
+                'message': 'Invalid bet data or wager amount',
+                'bet_id': None,
+                'status': 'validation_failed'
+            }
+        
+        # Check token validity
+        if not token_manager.get_valid_token():
+            logger.warning("No valid token for bet placement, attempting refresh...")
+            fresh_token = token_manager.refresh_token()
+            if not fresh_token:
+                return {
+                    'success': False,
+                    'message': 'Authentication failed - no valid token available',
+                    'bet_id': None,
+                    'status': 'auth_failed'
+                }
+        
+        # TODO: Implement actual bet placement logic here
+        # For now, simulate bet placement
+        import random
+        success = random.random() > 0.1  # 90% success rate for testing
+        
+        if success:
+            bet_id = f"bet_{int(time.time())}_{random.randint(1000, 9999)}"
+            logger.info(f"Bet placed successfully: {bet_id}")
+            
+            return {
+                'success': True,
+                'message': f'Bet placed successfully! ID: {bet_id}',
+                'bet_id': bet_id,
+                'status': 'placed',
+                'details': {
+                    'wager_amount': wager_amount,
+                    'odds': current_odds,
+                    'expected_return': wager_amount * (1 + (current_odds / 100)) if current_odds > 0 else wager_amount * (1 + (100 / abs(current_odds))),
+                    'placed_at': time.time()
+                }
+            }
+        else:
+            logger.warning("Bet placement failed during simulation")
+            return {
+                'success': False,
+                'message': 'Bet placement failed - please try again',
+                'bet_id': None,
+                'status': 'placement_failed'
+            }
+            
+    except Exception as e:
+        logger.error(f"Error during bet placement: {e}")
+        return {
+            'success': False,
+            'message': f'Server error during bet placement: {str(e)}',
+            'bet_id': None,
+            'status': 'server_error'
+        }
+
+@app.get("/api/bet/status/{bet_id}")
+async def get_bet_status(bet_id: str):
+    """Get status of a placed bet."""
+    try:
+        # TODO: Implement actual bet status checking
+        # For now, return mock status
+        return {
+            'success': True,
+            'bet_id': bet_id,
+            'status': 'pending',  # pending, confirmed, settled, failed
+            'message': 'Bet status retrieved successfully',
+            'details': {
+                'placed_at': time.time() - 300,  # 5 minutes ago
+                'last_updated': time.time()
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting bet status: {e}")
+        return {
+            'success': False,
+            'message': f'Error retrieving bet status: {str(e)}'
+        }
+
 # Global exception handler to prevent crashes
 import sys
 import traceback
@@ -1759,3 +1944,38 @@ if __name__ == "__main__":
         logger.error(f"Uvicorn crashed: {e}")
         logger.error(traceback.format_exc())
         # Don't exit, let the process restart 
+
+@app.post("/api/token/set")
+async def set_token(request: Request):
+    """Set a token manually from frontend."""
+    try:
+        body = await request.json()
+        token = body.get('token')
+        user = body.get('user', 'manual_user')
+        
+        if not token:
+            return JSONResponse(
+                status_code=400,
+                content={"message": "Token is required"}
+            )
+        
+        # Store the token in the token manager
+        token_manager._token_data = {
+            'token': token,
+            'user': user,
+            'group': 'manual',
+            'extracted_at': time.time(),
+            'expires_in': 86400  # 24 hours
+        }
+        token_manager._last_refresh_time = time.time()
+        
+        return JSONResponse(
+            status_code=200,
+            content={"message": f"Token set successfully for user: {user}"}
+        )
+    except Exception as e:
+        logger.error(f"Error setting token: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"Internal server error: {str(e)}"}
+        )

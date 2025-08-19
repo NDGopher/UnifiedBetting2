@@ -13,7 +13,9 @@ import EVCalculator from "./components/EVCalculator";
 import PropBuilder from "./components/PropBuilder";
 import BuckeyeScraper from './components/BuckeyeScraper';
 import BetBCKStatusPopup from './components/BetBCKStatusPopup';
-import HighEVHistory from './components/HighEVHistory';
+import MobileLayout from './components/MobileLayout';
+import AutoBetPlacer from './components/AutoBetPlacer';
+
 
 // Modern dark theme inspired by Onlook
 const modernTheme = createTheme({
@@ -156,12 +158,7 @@ function App() {
     <BetbckTabContext.Provider value={{ betbckTabRef }}>
       <ThemeProvider theme={modernTheme}>
         <CssBaseline />
-        <Box
-          sx={{
-            minHeight: "100vh",
-            background: "#101214",
-          }}
-        >
+        <MobileLayout title="Unified Betting">
           {/* Modern Header */}
           <AppBar position="static" elevation={0}>
             <Toolbar sx={{ py: 1, justifyContent: 'center', minHeight: 56 }}>
@@ -358,7 +355,9 @@ function App() {
                   <BuckeyeScraper />
                 </Paper>
               </Grid>
-              {/* High EV History Section */}
+
+              
+              {/* Auto Bet Placer Section */}
               <Grid item xs={12}>
                 <Paper
                   sx={{
@@ -385,23 +384,7 @@ function App() {
                     },
                   }}
                 >
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      mb: 2,
-                    }}
-                  >
-                    <Typography
-                      component="h2"
-                      variant="h6"
-                      sx={{ color: '#fff', fontWeight: 700 }}
-                    >
-                      High EV Alert History
-                    </Typography>
-                  </Box>
-                  <HighEVHistory />
+                  <AutoBetPlacer />
                 </Paper>
               </Grid>
               
@@ -437,7 +420,7 @@ function App() {
               </Grid>
             </Grid>
           </Container>
-        </Box>
+        </MobileLayout>
         
         {/* BetBCK Status Popup - appears only when needed */}
         <BetBCKStatusPopup />

@@ -8,15 +8,29 @@
     "market_container_selector": ".market, .selection, .price",
     "price_selector": ".price, .odd, .coefficient"
   },
+  "plive": {
+    "url": "https://plive.becoms.co/live/",
+    "event_row_selector": "div.event-list__item__details__container",
+    "home_team_selector": "div.event-list__item__details__teams__team__container:first-child p[data-testid='top-team-details']",
+    "away_team_selector": "div.event-list__item__details__teams__team__container:last-child p[data-testid='bottom-team-details']",
+    "market_container_selector": "div.offerings.market--two-row",
+    "price_selector": "div.odds div.odd span.emphasis.pane",
+    "moneyline_selector": "div.offerings.market--two-row.market-3",
+    "spread_selector": "div.offerings.market--two-row.market-6",
+    "total_selector": "div.offerings.market--two-row.market-5"
+  },
+  "allowed_books": [
+    "fanduel", "betmgm", "draftkings", "caesars", "espnbet", "pinnacle", "betrivers", "betonline", "bet365", "bovada", "circa", "hardrock"
+  ],
   "pto": {
-    "url": "https://picktheodds.app/en/live",
-    "event_row_selector": ".MuiBox-root.css-1t6isfq, .game-row",
+    "url": "https://picktheodds.app/en/odds-screen?league=MLB&betGroup=MONEYLINE&group=MONEY_LINE&time=MONEY_LINE&betView=false",
+    "event_row_selector": "[virtualrowstart]",
     "team_title_selector": "span[title]",
     "home_team_selector": "",
     "away_team_selector": "",
     "market_container_selector": "",
     "price_selector": "",
-    "book_cell_selector": ".MuiBox-root.css-fa7ybv, .MuiBox-root.css-1difu8q, .MuiBox-root.css-1au0dro",
+    "book_cell_selector": "[class*='MuiBox-root']",
     "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
     "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
   },
@@ -25,9 +39,239 @@
       "sport": "MLB",
       "market": "moneyline",
       "url": "https://picktheodds.app/en/odds-screen?league=MLB&betGroup=MONEYLINE&group=MONEY_LINE&time=MONEY_LINE&betView=false",
-      "event_row_selector": ".MuiBox-root.css-1t6isfq",
+      "event_row_selector": "[virtualrowstart]",
       "team_title_selector": "span[title]",
-      "book_cell_selector": ".MuiBox-root.css-fa7ybv, .MuiBox-root.css-1difu8q, .MuiBox-root.css-1au0dro",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "MLB",
+      "market": "spread",
+      "url": "https://picktheodds.app/en/odds-screen?league=MLB&betGroup=SPREAD&group=SPREAD&time=SPREAD&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "MLB",
+      "market": "total",
+      "url": "https://picktheodds.app/en/odds-screen?league=MLB&betGroup=TOTALS&group=TOTALS&time=TOTALS&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "MLS",
+      "market": "total",
+      "url": "https://picktheodds.app/en/odds-screen?league=MLS&betGroup=TOTALS&group=TOTAL_GAME_POINTS&time=TOTAL_GAME_POINTS&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "MLS",
+      "market": "moneyline",
+      "url": "https://picktheodds.app/en/odds-screen?league=MLS&betGroup=MONEYLINE&group=MONEY_LINE_3_WAY&time=MONEY_LINE_NO_OT_3_WAY&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "MLS",
+      "market": "spread",
+      "url": "https://picktheodds.app/en/odds-screen?league=MLS&betGroup=SPREAD&group=SPREAD_3_WAY&time=SPREAD_NO_OT_3_WAY&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NFL",
+      "market": "moneyline",
+      "url": "https://picktheodds.app/en/odds-screen?league=NFL&betGroup=MONEYLINE&group=MONEY_LINE&time=MONEY_LINE&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NFL",
+      "market": "spread",
+      "url": "https://picktheodds.app/en/odds-screen?league=NFL&betGroup=SPREAD&group=SPREAD_3_WAY&time=SPREAD_FIRST_HALF_3_WAY&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NFL",
+      "market": "total",
+      "url": "https://picktheodds.app/en/odds-screen?league=NFL&betGroup=TOTALS&group=TOTAL_GAME_POINTS&time=TOTAL_GAME_POINTS&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "WNBA",
+      "market": "moneyline",
+      "url": "https://picktheodds.app/en/odds-screen?league=WNBA&betGroup=MONEYLINE&group=MONEY_LINE&time=MONEY_LINE&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "WNBA",
+      "market": "spread",
+      "url": "https://picktheodds.app/en/odds-screen?league=WNBA&betGroup=SPREAD&group=SPREAD&time=SPREAD&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "WNBA",
+      "market": "total",
+      "url": "https://picktheodds.app/en/odds-screen?league=WNBA&betGroup=TOTALS&group=TOTAL_GAME_POINTS&time=TOTAL_GAME_POINTS&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NCAAF",
+      "market": "moneyline",
+      "url": "https://picktheodds.app/en/odds-screen?league=NCAAF&betGroup=MONEYLINE&group=MONEY_LINE&time=MONEY_LINE&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NCAAF",
+      "market": "total",
+      "url": "https://picktheodds.app/en/odds-screen?league=NCAAF&betGroup=TOTALS&group=TOTAL_GAME_POINTS&time=TOTAL_GAME_POINTS&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "EPL",
+      "market": "moneyline",
+      "url": "https://picktheodds.app/en/odds-screen?league=ENGLISH_PREMIER&betGroup=MONEYLINE&group=MONEY_LINE_3_WAY&time=MONEY_LINE_NO_OT_3_WAY&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "EPL",
+      "market": "spread",
+      "url": "https://picktheodds.app/en/odds-screen?league=ENGLISH_PREMIER&betGroup=SPREAD&group=SPREAD_3_WAY&time=SPREAD_NO_OT_3_WAY&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "EPL",
+      "market": "total",
+      "url": "https://picktheodds.app/en/odds-screen?league=ENGLISH_PREMIER&betGroup=TOTALS&group=TOTAL_GAME_POINTS&time=TOTAL_GAME_POINTS&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "LA_LIGA",
+      "market": "total",
+      "url": "https://picktheodds.app/en/odds-screen?league=LA_LLGA&betGroup=TOTALS&group=TOTAL_GAME_POINTS&time=TOTAL_GAME_POINTS&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NBA",
+      "market": "moneyline",
+      "url": "https://picktheodds.app/en/odds-screen?league=NBA&betGroup=MONEYLINE&group=MONEY_LINE&time=MONEY_LINE&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NBA",
+      "market": "spread",
+      "url": "https://picktheodds.app/en/odds-screen?league=NBA&betGroup=SPREAD&group=SPREAD&time=SPREAD&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NBA",
+      "market": "total",
+      "url": "https://picktheodds.app/en/odds-screen?league=NBA&betGroup=TOTALS&group=TOTAL_GAME_POINTS&time=TOTAL_GAME_POINTS&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NHL",
+      "market": "moneyline",
+      "url": "https://picktheodds.app/en/odds-screen?league=NHL&betGroup=MONEYLINE&group=MONEY_LINE&time=MONEY_LINE&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NHL",
+      "market": "spread",
+      "url": "https://picktheodds.app/en/odds-screen?league=NHL&betGroup=SPREAD&group=SPREAD&time=SPREAD&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
+      "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
+      "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
+    },
+    {
+      "sport": "NHL",
+      "market": "total",
+      "url": "https://picktheodds.app/en/odds-screen?league=NHL&betGroup=TOTALS&group=TOTAL_GAME_POINTS&time=TOTAL_GAME_POINTS&betView=false",
+      "event_row_selector": "[virtualrowstart]",
+      "team_title_selector": "span[title]",
+      "book_cell_selector": "[class*='MuiBox-root']",
       "book_icon_selector": "img[alt], [aria-label] img, [aria-label]",
       "book_odds_value_selector": ".MuiTypography-oddsRobotoMono"
     }

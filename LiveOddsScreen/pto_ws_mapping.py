@@ -19,7 +19,12 @@ def canonicalize_site(site_id: str) -> str:
         'bet_online': 'betonline',
         'betrivers': 'betrivers',
         'bet_rivers': 'betrivers',
-        # occasionally PTO uses enum-like codes; pass through
+        'bet365': 'bet365',
+        'bet_365': 'bet365',
+        'bovada': 'bovada',
+        'circa': 'circa',
+        'hard_rock': 'hardrock',
+        'hardrock': 'hardrock',
     }
     for k, v in mapping.items():
         if k in s:

@@ -316,285 +316,354 @@ def format_bet_description(market: str, selection: str, line: str, home_team: st
 
 def analyze_markets_for_ev(bet_data: Dict, pinnacle_data: Dict) -> List[Dict]:
     """
-    Analyze markets for expected value opportunities, matching the logic from PODBot:
-    - Use processed Pinnacle data (with NVP and American odds fields)
-    - Match BetBCK and Pinnacle by market type and line
-    - Calculate EV using BetBCK American odds (converted to decimal) and Pinnacle NVP odds (decimal)
-    - Return all relevant info for frontend display
+    Analyze BetBCK markets against Pinnacle NVP data to find positive EV opportunities.
+    Now handles both full game and first half markets separately.
     """
-    # Defensive copying to prevent race conditions and data mutation
-    bet_data_copy = copy.deepcopy(bet_data) if bet_data else {}
-    pinnacle_data_copy = copy.deepcopy(pinnacle_data) if pinnacle_data else {}
-    
     potential_bets = []
     
-    # Enhanced null checks
-    if not pinnacle_data_copy:
-        logger.info("[AnalyzeMarkets] No Pinnacle data available (None)")
+    if not bet_data or not pinnacle_data:
+        print("[AnalyzeMarkets] Missing bet_data or pinnacle_data")
         return potential_bets
     
-    if not isinstance(pinnacle_data_copy, dict):
-        logger.info(f"[AnalyzeMarkets] Pinnacle data is not a dict: {type(pinnacle_data_copy)}")
-        return potential_bets
+    # Check if we have the new structured data format
+    has_new_structure = 'full_game' in bet_data or 'first_half' in bet_data
     
-    # Check for 'data' key with better error handling
-    if not pinnacle_data_copy.get('data'):
-        logger.info("[AnalyzeMarkets] No 'data' key in Pinnacle data")
-        return potential_bets
-    
-    # Additional check to ensure data is not None
-    if pinnacle_data_copy['data'] is None:
-        logger.info("[AnalyzeMarkets] Pinnacle data['data'] is None")
-        return potential_bets
-    
-    try:
-        pin_data = pinnacle_data_copy['data']
+    if has_new_structure:
+        print(f"[AnalyzeMarkets] Processing new structured data format")
+        print(f"[AnalyzeMarkets] Full game data: {'Yes' if bet_data.get('full_game') else 'No'}")
+        print(f"[AnalyzeMarkets] First half data: {'Yes' if bet_data.get('first_half') else 'No'}")
         
-        # Additional null checks for pin_data
-        if pin_data is None:
-            logger.info("[AnalyzeMarkets] pin_data is None")
-            return potential_bets
+        # Get Pinnacle periods data
+        periods = pinnacle_data.get('data', {}).get('periods', {})
+        print(f"[AnalyzeMarkets] Pinnacle periods available: {list(periods.keys())}")
         
-        if not isinstance(pin_data, dict):
-            logger.info(f"[AnalyzeMarkets] pin_data is not a dict: {type(pin_data)}")
-            return potential_bets
+        # Process full game markets
+        if bet_data.get('full_game'):
+            full_game_period = periods.get('num_0') or periods.get('0')
+            if full_game_period:
+                print(f"[AnalyzeMarkets] Processing full game markets with period data: {list(full_game_period.keys())}")
+                full_game_bets = _analyze_period_markets(
+                    bet_data['full_game'], 
+                    full_game_period, 
+                    pinnacle_data['data'], 
+                    'Full Game'
+                )
+                potential_bets.extend(full_game_bets)
+            else:
+                print(f"[AnalyzeMarkets] No full game period data available in Pinnacle")
+        else:
+            print(f"[AnalyzeMarkets] No full game data in BetBCK")
         
-        periods = pin_data.get('periods', {})
-        
-        # Additional null checks for periods
-        if periods is None:
-            logger.info("[AnalyzeMarkets] periods is None")
-            return potential_bets
-        
-        if not isinstance(periods, dict):
-            logger.info(f"[AnalyzeMarkets] periods is not a dict: {type(periods)}")
-            return potential_bets
-        
-        # Try both 'num_0' and '0' for period data
+        # Process first half markets
+        if bet_data.get('first_half'):
+            first_half_period = periods.get('num_1') or periods.get('1')
+            if first_half_period:
+                print(f"[AnalyzeMarkets] Processing first half markets with period data: {list(first_half_period.keys())}")
+                first_half_bets = _analyze_period_markets(
+                    bet_data['first_half'], 
+                    first_half_period, 
+                    pinnacle_data['data'], 
+                    'First Half'
+                )
+                potential_bets.extend(first_half_bets)
+            else:
+                print(f"[AnalyzeMarkets] No first half period data available in Pinnacle")
+        else:
+            print(f"[AnalyzeMarkets] No first half data in BetBCK")
+    else:
+        print(f"[AnalyzeMarkets] Processing legacy data format")
+        # Legacy structure - process as full game only
         full_game = periods.get('num_0') or periods.get('0')
-        
-        # Additional null checks for full_game
-        if full_game is None:
-            logger.info("[AnalyzeMarkets] full_game is None")
-            return potential_bets
-        
-        if not isinstance(full_game, dict):
-            logger.info(f"[AnalyzeMarkets] full_game is not a dict: {type(full_game)}")
-            return potential_bets
-        
-        if not full_game:
-            logger.error(f"[AnalyzeMarkets] No 'num_0' or '0' period found in periods: {periods}")
-            return []
-        
-        # --- Moneyline ---
-        ml = full_game.get('money_line', {})
-        
-        # Additional null checks for moneyline
-        if ml is None:
-            logger.info("[AnalyzeMarkets] money_line is None")
-            ml = {}
-        elif not isinstance(ml, dict):
-            logger.info(f"[AnalyzeMarkets] money_line is not a dict: {type(ml)}")
-            ml = {}
-        
-        if bet_data_copy.get('home_moneyline_american') and ml.get('nvp_american_home'):
-            bet_odds = american_to_decimal(bet_data_copy['home_moneyline_american'])
-            true_odds = ml.get('nvp_home')
-            if bet_odds and true_odds:
-                ev = calculate_ev(bet_odds, true_odds)
-                # Get team names from pinnacle data
-                home_team = pin_data.get('home', '')
-                away_team = pin_data.get('away', '')
-                potential_bets.append({
-                    'market': 'Moneyline',
-                    'selection': 'Home',
-                    'line': '',
-                    'pinnacle_nvp': ml.get('nvp_american_home', 'N/A'),
-                    'betbck_odds': bet_data_copy['home_moneyline_american'],
-                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
-                    'home_team': home_team,
-                    'away_team': away_team,
-                    'bet': format_bet_description('Moneyline', 'Home', '', home_team, away_team)
-                })
-            
-        if bet_data_copy.get('away_moneyline_american') and ml.get('nvp_american_away'):
-            bet_odds = american_to_decimal(bet_data_copy['away_moneyline_american'])
-            true_odds = ml.get('nvp_away')
-            if bet_odds and true_odds:
-                ev = calculate_ev(bet_odds, true_odds)
-                # Get team names from pinnacle data
-                home_team = pin_data.get('home', '')
-                away_team = pin_data.get('away', '')
-                potential_bets.append({
-                    'market': 'Moneyline',
-                    'selection': 'Away',
-                    'line': '',
-                    'pinnacle_nvp': ml.get('nvp_american_away', 'N/A'),
-                    'betbck_odds': bet_data_copy['away_moneyline_american'],
-                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
-                    'home_team': home_team,
-                    'away_team': away_team,
-                    'bet': format_bet_description('Moneyline', 'Away', '', home_team, away_team)
-                })
-            
-        if bet_data_copy.get('draw_moneyline_american') and ml.get('nvp_american_draw'):
-            bet_odds = american_to_decimal(bet_data_copy['draw_moneyline_american'])
-            true_odds = ml.get('nvp_draw')
-            if bet_odds and true_odds:
-                ev = calculate_ev(bet_odds, true_odds)
-                # Get team names from pinnacle data
-                home_team = pin_data.get('home', '')
-                away_team = pin_data.get('away', '')
-                potential_bets.append({
-                    'market': 'Moneyline',
-                    'selection': 'Draw',
-                    'line': '',
-                    'pinnacle_nvp': ml.get('nvp_american_draw', 'N/A'),
-                    'betbck_odds': bet_data_copy['draw_moneyline_american'],
-                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
-                    'home_team': home_team,
-                    'away_team': away_team,
-                    'bet': format_bet_description('Moneyline', 'Draw', '', home_team, away_team)
-                })
+        if full_game:
+            print(f"[AnalyzeMarkets] Processing legacy data with full game period: {list(full_game.keys())}")
+            legacy_bets = _analyze_period_markets(bet_data, full_game, pinnacle_data['data'], 'Full Game')
+            potential_bets.extend(legacy_bets)
+        else:
+            print(f"[AnalyzeMarkets] No full game period data available for legacy format")
+    
+    print(f"[AnalyzeMarkets] Total markets found: {len(potential_bets)}")
+    return potential_bets
 
-        # --- Spreads ---
-        pin_spreads = full_game.get('spreads')
-        if not isinstance(pin_spreads, dict):
-            pin_spreads = {}
-        
-        for spread_key, pin_spread in pin_spreads.items():
-            line = pin_spread.get('hdp')
-            
-            # Home
-            for s in bet_data_copy.get('home_spreads', []):
-                bet_line = s.get('line')
-                try:
-                    if bet_line is not None and line is not None and math.isclose(float(bet_line), float(line), abs_tol=0.01) and pin_spread.get('nvp_american_home'):
-                        bet_odds = american_to_decimal(s.get('odds'))
-                        true_odds = pin_spread.get('nvp_home')
-                        if bet_odds and true_odds:
-                            ev = calculate_ev(bet_odds, true_odds)
-                            # Get team names from pinnacle data
-                            home_team = pin_data.get('home', '')
-                            away_team = pin_data.get('away', '')
-                            potential_bets.append({
-                                'market': 'Spread',
-                                'selection': 'Home',
-                                'line': str(line),
-                                'pinnacle_nvp': pin_spread.get('nvp_american_home', 'N/A'),
-                                'betbck_odds': s.get('odds'),
-                                'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
-                                'home_team': home_team,
-                                'away_team': away_team,
-                                'bet': format_bet_description('Spread', 'Home', str(line), home_team, away_team)
-                            })
-                except Exception as e:
-                    continue
-            
-            # Away
-            for s in bet_data_copy.get('away_spreads', []):
-                bet_line = s.get('line')
-                try:
-                    if bet_line is not None and line is not None and math.isclose(float(bet_line), -float(line), abs_tol=0.01) and pin_spread.get('nvp_american_away'):
-                        bet_odds = american_to_decimal(s.get('odds'))
-                        true_odds = pin_spread.get('nvp_away')
-                        if bet_odds and true_odds:
-                            ev = calculate_ev(bet_odds, true_odds)
-                            # Get team names from pinnacle data
-                            home_team = pin_data.get('home', '')
-                            away_team = pin_data.get('away', '')
-                            potential_bets.append({
-                                'market': 'Spread',
-                                'selection': 'Away',
-                                'line': str(-line),
-                                'pinnacle_nvp': pin_spread.get('nvp_american_away', 'N/A'),
-                                'betbck_odds': s.get('odds'),
-                                'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
-                                'home_team': home_team,
-                                'away_team': away_team,
-                                'bet': format_bet_description('Spread', 'Away', str(-line), home_team, away_team)
-                            })
-                except Exception as e:
-                    continue
-
-        # --- Totals ---
-        pin_totals = full_game.get('totals')
-        if not isinstance(pin_totals, dict):
-            pin_totals = {}
-        
-        # Gather all BetBCK total lines/odds
-        betbck_totals = []
-        if bet_data_copy.get('game_total_line') is not None:
-            betbck_totals.append({
-                'line': normalize_total_line(bet_data_copy.get('game_total_line')),
-                'over_odds': bet_data_copy.get('game_total_over_odds'),
-                'under_odds': bet_data_copy.get('game_total_under_odds')
-            })
-        
-        best_over = None
-        best_under = None
-        for bck_total in betbck_totals:
-            bck_line = bck_total['line']
-            for total_key, pin_total in pin_totals.items():
-                pin_line = normalize_total_line(pin_total.get('points'))
-                if bck_line is not None and pin_line is not None and math.isclose(bck_line, pin_line, abs_tol=0.01):
-                    # Over
-                    if bck_total['over_odds'] and pin_total.get('nvp_american_over'):
-                        bet_odds = american_to_decimal(bck_total['over_odds'])
-                        true_odds = pin_total.get('nvp_over')
-                        if bet_odds and true_odds:
-                            ev = calculate_ev(bet_odds, true_odds)
-                            if best_over is None or (ev is not None and ev > best_over['ev_val']):
-                                # Get team names from pinnacle data
-                                home_team = pin_data.get('home', '')
-                                away_team = pin_data.get('away', '')
-                                best_over = {
-                                    'market': 'Total',
-                                    'selection': 'Over',
-                                    'line': str(pin_line),
-                                    'pinnacle_nvp': pin_total.get('nvp_american_over', 'N/A'),
-                                    'betbck_odds': bck_total['over_odds'],
-                                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
-                                    'ev_val': ev,
-                                    'home_team': home_team,
-                                    'away_team': away_team,
-                                    'bet': format_bet_description('Total', 'Over', str(pin_line), home_team, away_team)
-                                }
-                    # Under
-                    if bck_total['under_odds'] and pin_total.get('nvp_american_under'):
-                        bet_odds = american_to_decimal(bck_total['under_odds'])
-                        true_odds = pin_total.get('nvp_under')
-                        if bet_odds and true_odds:
-                            ev = calculate_ev(bet_odds, true_odds)
-                            if best_under is None or (ev is not None and ev > best_under['ev_val']):
-                                # Get team names from pinnacle data
-                                home_team = pin_data.get('home', '')
-                                away_team = pin_data.get('away', '')
-                                best_under = {
-                                    'market': 'Total',
-                                    'selection': 'Under',
-                                    'line': str(pin_line),
-                                    'pinnacle_nvp': pin_total.get('nvp_american_under', 'N/A'),
-                                    'betbck_odds': bck_total['under_odds'],
-                                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
-                                    'ev_val': ev,
-                                    'home_team': home_team,
-                                    'away_team': away_team,
-                                    'bet': format_bet_description('Total', 'Under', str(pin_line), home_team, away_team)
-                                }
-        # Add best totals to potential bets
-        if best_over:
-            del best_over['ev_val']
-            potential_bets.append(best_over)
-        if best_under:
-            del best_under['ev_val']
-            potential_bets.append(best_under)
-        
+def _analyze_period_markets(bet_data: Dict, period_data: Dict, pin_data: Dict, period_name: str) -> List[Dict]:
+    """
+    Analyze markets for a specific period (full game or first half).
+    Only processes markets that exist in both BetBCK and Pinnacle data.
+    """
+    potential_bets = []
+    
+    # Validate that we have the required data
+    if not bet_data or not period_data:
+        print(f"[MarketAnalysis] Skipping {period_name} - missing bet_data or period_data")
         return potential_bets
     
-    except Exception as e:
-        logger.error(f"[AnalyzeMarkets] Error analyzing markets: {e}")
-        return []
+    # Extract team names
+    home_team = pin_data.get('home', '')
+    away_team = pin_data.get('away', '')
+    
+    # Get meta limits for this period
+    meta_limits = period_data.get('meta', {})
+    
+    # --- Moneyline Analysis ---
+    if bet_data.get('home_moneyline_american') and period_data.get('money_line', {}).get('nvp_american_home'):
+        bet_odds = american_to_decimal(bet_data['home_moneyline_american'])
+        true_odds = period_data['money_line'].get('nvp_home')
+        if bet_odds and true_odds:
+            ev = calculate_ev(bet_odds, true_odds)
+            potential_bets.append({
+                'market': 'Moneyline',
+                'selection': 'Home',
+                'line': '',
+                'pinnacle_nvp': period_data['money_line'].get('nvp_american_home', 'N/A'),
+                'pinnacle_limit': period_data['money_line'].get('max_money_line') or meta_limits.get('max_money_line') or meta_limits.get('max_spread') or meta_limits.get('max_total'),
+                'betbck_odds': bet_data['home_moneyline_american'],
+                'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                'home_team': home_team,
+                'away_team': away_team,
+                'bet': format_bet_description('Moneyline', 'Home', '', home_team, away_team),
+                'period': period_name
+            })
+    
+    if bet_data.get('away_moneyline_american') and period_data.get('money_line', {}).get('nvp_american_away'):
+        bet_odds = american_to_decimal(bet_data['away_moneyline_american'])
+        true_odds = period_data['money_line'].get('nvp_away')
+        if bet_odds and true_odds:
+            ev = calculate_ev(bet_odds, true_odds)
+            potential_bets.append({
+                'market': 'Moneyline',
+                'selection': 'Away',
+                'line': '',
+                'pinnacle_nvp': period_data['money_line'].get('nvp_american_away', 'N/A'),
+                'pinnacle_limit': period_data['money_line'].get('max_money_line') or meta_limits.get('max_money_line') or meta_limits.get('max_spread') or meta_limits.get('max_total'),
+                'betbck_odds': bet_data['away_moneyline_american'],
+                'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                'home_team': home_team,
+                'away_team': away_team,
+                'bet': format_bet_description('Moneyline', 'Away', '', home_team, away_team),
+                'period': period_name
+            })
+    
+    # Draw moneyline (only for full game, not first half)
+    if period_name == 'Full Game' and bet_data.get('draw_moneyline_american') and period_data.get('money_line', {}).get('nvp_american_draw'):
+        bet_odds = american_to_decimal(bet_data['draw_moneyline_american'])
+        true_odds = period_data['money_line'].get('nvp_draw')
+        if bet_odds and true_odds:
+            ev = calculate_ev(bet_odds, true_odds)
+            potential_bets.append({
+                'market': 'Moneyline',
+                'selection': 'Draw',
+                'line': '',
+                'pinnacle_nvp': period_data['money_line'].get('nvp_american_draw', 'N/A'),
+                'pinnacle_limit': period_data['money_line'].get('max_money_line') or meta_limits.get('max_money_line') or meta_limits.get('max_spread') or meta_limits.get('max_total'),
+                'betbck_odds': bet_data['draw_moneyline_american'],
+                'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                'home_team': home_team,
+                'away_team': away_team,
+                'bet': format_bet_description('Moneyline', 'Draw', '', home_team, away_team),
+                'period': period_name
+            })
+    
+    # --- Spread Analysis ---
+    if bet_data.get('home_spreads') and period_data.get('spreads'):
+        for s in bet_data['home_spreads']:
+            line = s.get('line')
+            if line and str(line) in period_data['spreads']:
+                pin_spread = period_data['spreads'][str(line)]
+                bet_odds = american_to_decimal(s.get('odds'))
+                true_odds = pin_spread.get('nvp_home')
+                if bet_odds and true_odds:
+                    ev = calculate_ev(bet_odds, true_odds)
+                    potential_bets.append({
+                        'market': 'Spread',
+                        'selection': 'Home',
+                        'line': str(line),
+                        'pinnacle_nvp': pin_spread.get('nvp_american_home', 'N/A'),
+                        'pinnacle_limit': pin_spread.get('max') or meta_limits.get('max_spread'),
+                        'betbck_odds': s.get('odds'),
+                        'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'bet': format_bet_description('Spread', 'Home', str(line), home_team, away_team),
+                        'period': period_name
+                    })
+    
+    if bet_data.get('away_spreads') and period_data.get('spreads'):
+        for s in bet_data['away_spreads']:
+            line = s.get('line')
+            if line and str(line) in period_data['spreads']:
+                pin_spread = period_data['spreads'][str(line)]
+                bet_odds = american_to_decimal(s.get('odds'))
+                true_odds = pin_spread.get('nvp_away')
+                if bet_odds and true_odds:
+                    ev = calculate_ev(bet_odds, true_odds)
+                    potential_bets.append({
+                        'market': 'Spread',
+                        'selection': 'Away',
+                        'line': str(line),
+                        'pinnacle_nvp': pin_spread.get('nvp_american_away', 'N/A'),
+                        'pinnacle_limit': pin_spread.get('max') or meta_limits.get('max_spread'),
+                        'betbck_odds': s.get('odds'),
+                        'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'bet': format_bet_description('Spread', 'Away', str(line), home_team, away_team),
+                        'period': period_name
+                    })
+    
+    # --- Total Analysis ---
+    # Only process totals if both BetBCK and Pinnacle have the data
+    if (bet_data.get('game_total_line') and 
+        bet_data.get('game_total_over_odds') and 
+        period_data.get('totals')):
+        
+        points = bet_data['game_total_line']
+        # Find matching total in Pinnacle data
+        matching_total = None
+        for total_key, total_data in period_data['totals'].items():
+            try:
+                if abs(float(total_key) - float(points)) < 0.1:  # Allow small differences
+                    matching_total = total_data
+                    break
+            except (ValueError, TypeError):
+                continue
+        
+        if matching_total:
+            # Over
+            if bet_data.get('game_total_over_odds'):
+                bet_odds = american_to_decimal(bet_data['game_total_over_odds'])
+                true_odds = matching_total.get('nvp_over')
+                if bet_odds and true_odds:
+                    ev = calculate_ev(bet_odds, true_odds)
+                    potential_bets.append({
+                        'market': 'Total',
+                        'selection': 'Over',
+                        'line': str(points),
+                        'pinnacle_nvp': matching_total.get('nvp_american_over', 'N/A'),
+                        'pinnacle_limit': matching_total.get('max') or meta_limits.get('max_total'),
+                        'betbck_odds': bet_data['game_total_over_odds'],
+                        'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'bet': format_bet_description('Total', 'Over', str(points), home_team, away_team),
+                        'period': period_name
+                    })
+            
+            # Under
+            if bet_data.get('game_total_under_odds'):
+                bet_odds = american_to_decimal(bet_data['game_total_under_odds'])
+                true_odds = matching_total.get('nvp_under')
+                if bet_odds and true_odds:
+                    ev = calculate_ev(bet_odds, true_odds)
+                    potential_bets.append({
+                        'market': 'Total',
+                        'selection': 'Under',
+                        'line': str(points),
+                        'pinnacle_nvp': matching_total.get('nvp_american_under', 'N/A'),
+                        'pinnacle_limit': matching_total.get('max') or meta_limits.get('max_total'),
+                        'betbck_odds': bet_data['game_total_under_odds'],
+                        'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'bet': format_bet_description('Total', 'Under', str(points), home_team, away_team),
+                        'period': period_name
+                    })
+    
+    # --- Team Total Analysis ---
+    # Only process team totals if both BetBCK and Pinnacle have the data
+    if period_data.get('team_totals'):
+        pin_team_totals = period_data['team_totals']
+        
+        # Home team total
+        if (bet_data.get('home_team_total_over_odds') and 
+            bet_data.get('home_team_total_over_line') and
+            pin_team_totals.get('home', {}).get('nvp_american_over')):
+            
+            bet_odds = american_to_decimal(bet_data['home_team_total_over_odds'])
+            true_odds = pin_team_totals['home'].get('nvp_over')
+            if bet_odds and true_odds:
+                ev = calculate_ev(bet_odds, true_odds)
+                potential_bets.append({
+                    'market': 'Home Team Total',
+                    'selection': 'Over',
+                    'line': str(bet_data.get('home_team_total_over_line', '')),
+                    'pinnacle_nvp': pin_team_totals['home'].get('nvp_american_over', 'N/A'),
+                    'pinnacle_limit': pin_team_totals['home'].get('max') or meta_limits.get('max_team_total'),
+                    'betbck_odds': bet_data['home_team_total_over_odds'],
+                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'bet': format_bet_description('Home Team Total', 'Over', str(bet_data.get('home_team_total_over_line', '')), home_team, away_team),
+                    'period': period_name
+                })
+        
+        if (bet_data.get('home_team_total_under_odds') and 
+            bet_data.get('home_team_total_under_line') and
+            pin_team_totals.get('home', {}).get('nvp_american_under')):
+            
+            bet_odds = american_to_decimal(bet_data['home_team_total_under_odds'])
+            true_odds = pin_team_totals['home'].get('nvp_under')
+            if bet_odds and true_odds:
+                ev = calculate_ev(bet_odds, true_odds)
+                potential_bets.append({
+                    'market': 'Home Team Total',
+                    'selection': 'Under',
+                    'line': str(bet_data.get('home_team_total_under_line', '')),
+                    'pinnacle_nvp': pin_team_totals['home'].get('nvp_american_under', 'N/A'),
+                    'pinnacle_limit': pin_team_totals['home'].get('max') or meta_limits.get('max_team_total'),
+                    'betbck_odds': bet_data['home_team_total_under_odds'],
+                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'bet': format_bet_description('Home Team Total', 'Under', str(bet_data.get('home_team_total_under_line', '')), home_team, away_team),
+                    'period': period_name
+                })
+        
+        # Away team total
+        if (bet_data.get('away_team_total_over_odds') and 
+            bet_data.get('away_team_total_over_line') and
+            pin_team_totals.get('away', {}).get('nvp_american_over')):
+            
+            bet_odds = american_to_decimal(bet_data['away_team_total_over_odds'])
+            true_odds = pin_team_totals['away'].get('nvp_over')
+            if bet_odds and true_odds:
+                ev = calculate_ev(bet_odds, true_odds)
+                potential_bets.append({
+                    'market': 'Away Team Total',
+                    'selection': 'Over',
+                    'line': str(bet_data.get('away_team_total_over_line', '')),
+                    'pinnacle_nvp': pin_team_totals['away'].get('nvp_american_over', 'N/A'),
+                    'pinnacle_limit': pin_team_totals['away'].get('max') or meta_limits.get('max_team_total'),
+                    'betbck_odds': bet_data['away_team_total_over_odds'],
+                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'bet': format_bet_description('Away Team Total', 'Over', str(bet_data.get('away_team_total_over_line', '')), home_team, away_team),
+                    'period': period_name
+                })
+        
+        if (bet_data.get('away_team_total_under_odds') and 
+            bet_data.get('away_team_total_under_line') and
+            pin_team_totals.get('away', {}).get('nvp_american_under')):
+            
+            bet_odds = american_to_decimal(bet_data['away_team_total_under_odds'])
+            true_odds = pin_team_totals['away'].get('nvp_under')
+            if bet_odds and true_odds:
+                ev = calculate_ev(bet_odds, true_odds)
+                potential_bets.append({
+                    'market': 'Away Team Total',
+                    'selection': 'Under',
+                    'line': str(bet_data.get('away_team_total_under_line', '')),
+                    'pinnacle_nvp': pin_team_totals['away'].get('nvp_american_under', 'N/A'),
+                    'pinnacle_limit': pin_team_totals['away'].get('max') or meta_limits.get('max_team_total'),
+                    'betbck_odds': bet_data['away_team_total_under_odds'],
+                    'ev': f"{ev*100:.2f}%" if ev is not None else 'N/A',
+                    'home_team': home_team,
+                    'away_team': away_team,
+                    'bet': format_bet_description('Away Team Total', 'Under', str(bet_data.get('away_team_total_under_line', '')), home_team, away_team),
+                    'period': period_name
+                })
+    
+    print(f"[MarketAnalysis] {period_name}: Found {len(potential_bets)} valid markets")
+    return potential_bets
 
 skip_indicators = ["1H", "1st Half", "First Half", "1st 5 Innings", "First Five Innings", "1st Period", "2nd Period", "3rd Period", "hits+runs+errors", "h+r+e", "hre", "corners", "series"]
 prop_keywords = ['(Corners)', '(Bookings)', '(Hits+Runs+Errors)']

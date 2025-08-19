@@ -1,0 +1,100 @@
+{
+  "rows": [
+    {
+      "sport": "NFL",
+      "market": "total",
+      "home": "MLB",
+      "away": "Game",
+      "best_home": "betbck +250",
+      "best_away": "betbck -349",
+      "avg_home": 250.0,
+      "avg_away": -349.0,
+      "books": {
+        "betbck": {
+          "home": "+250",
+          "away": "-349"
+        }
+      }
+    },
+    {
+      "sport": "NFL",
+      "market": "total",
+      "home": "Game",
+      "away": "Game Winner",
+      "best_home": "betbck +250",
+      "best_away": "betbck -349",
+      "avg_home": 250.0,
+      "avg_away": -349.0,
+      "books": {
+        "betbck": {
+          "home": "+250",
+          "away": "-349"
+        }
+      }
+    },
+    {
+      "sport": "NFL",
+      "market": "moneyline",
+      "home": "Chicago Cubs",
+      "away": "St. Louis Cardinals",
+      "best_home": "betbck +250",
+      "best_away": "betbck -349",
+      "avg_home": 250.0,
+      "avg_away": -349.0,
+      "books": {
+        "betbck": {
+          "home": "+250",
+          "away": "-349"
+        }
+      }
+    },
+    {
+      "sport": "NBA",
+      "market": "moneyline",
+      "home": "WNBA",
+      "away": "Game",
+      "best_home": "betbck -107",
+      "best_away": "betbck -121",
+      "avg_home": -107.0,
+      "avg_away": -121.0,
+      "books": {
+        "betbck": {
+          "home": "-107",
+          "away": "-121"
+        }
+      }
+    },
+    {
+      "sport": "NBA",
+      "market": "total",
+      "home": "Game",
+      "away": "Spread",
+      "best_home": "betbck -107",
+      "best_away": "betbck -121",
+      "avg_home": -107.0,
+      "avg_away": -121.0,
+      "books": {
+        "betbck": {
+          "home": "-107",
+          "away": "-121"
+        }
+      }
+    },
+    {
+      "sport": "NBA",
+      "market": "moneyline",
+      "home": "Connecticut Sun",
+      "away": "Las Vegas Aces",
+      "best_home": "betbck -107",
+      "best_away": "betbck -121",
+      "avg_home": -107.0,
+      "avg_away": -121.0,
+      "books": {
+        "betbck": {
+          "home": "-107",
+          "away": "-121"
+        }
+      }
+    }
+  ]
+}

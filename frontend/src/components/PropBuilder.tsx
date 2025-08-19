@@ -4,6 +4,7 @@ import {
   Typography,
   Box,
   Grid,
+  Button,
   TextField,
   FormControl,
   InputLabel,
@@ -37,6 +38,9 @@ import {
   Delete,
   Cancel,
 } from "@mui/icons-material";
+import BetPlacementButton from './BetPlacementButton';
+import TokenManager from './TokenManager';
+import { BetPlacementData } from '../services/betPlacementService';
 import { useWebSocket } from '../hooks/useWebSocket';
 
 interface PTOProp {
@@ -225,6 +229,26 @@ const PropBuilder: React.FC = () => {
     setHiddenProps(prev => new Set(prev).add(propId));
   };
 
+  // Convert PTO prop to bet placement data
+  const createBetData = (prop: PTOProp['prop']): BetPlacementData => {
+    // Extract odds value (remove + sign if present)
+    const oddsValue = parseInt(prop.odds.replace('+', ''));
+    
+    return {
+      playerId: 0, // Will need to be populated from actual prop data
+      gameId: 0, // Will need to be populated from actual prop data  
+      statistic: 0, // Will need to be populated from actual prop data
+      conditionValue: 0, // Will need to be populated from actual prop data
+      provider: 'nix', // Default provider
+      type: 1, // Default type
+      description: prop.propDesc,
+      odds: oddsValue,
+      wager: 0, // Will be set by user
+      sportsbook: 'buckeye', // Default sportsbook
+      currency: 'USD'
+    };
+  };
+
   const filteredProps = (ptoData?.props ?? []).filter((prop) => {
     const propId = prop.prop && prop.prop.propDesc ? prop.prop.propDesc + (prop.prop.teams?.join('-') || '') : '';
     if (!showHidden && hiddenProps.has(propId)) return false;
@@ -311,6 +335,9 @@ const PropBuilder: React.FC = () => {
     <Paper
       sx={{ p: 2, height: "100%", display: "flex", flexDirection: "column" }}
     >
+      {/* Token Management Section */}
+      <TokenManager />
+
       <Box
         sx={{
           display: "flex",
@@ -402,7 +429,8 @@ const PropBuilder: React.FC = () => {
         {filteredProps.length > 0 ? (
           <Grid container spacing={2}>
             {sortedProps.map((propObj, idx) => {
-              const prop = propObj.prop;
+              // Handle both data structures: propObj.prop and propObj directly
+              const prop = propObj.prop || propObj;
               const propId = prop.propDesc + (prop.teams?.join('-') || '');
               // Debug: log the full prop object and books field
               console.log('Full prop object:', propObj);
@@ -472,7 +500,12 @@ const PropBuilder: React.FC = () => {
                         }}>
                           <Typography variant="h6" sx={{ color: '#43a047', fontWeight: 700, fontSize: '1.15em', lineHeight: 1, textAlign: 'center', width: '100%' }}>{prop.ev}</Typography>
                         </Box>
-                        {/* Room for future buttons */}
+                        {/* Bet Placement Button */}
+                        <BetPlacementButton 
+                          betData={createBetData(prop)}
+                          size="small"
+                          variant="outlined"
+                        />
                       </Box>
                     </Box>
                     {/* Sport logo in bottom right corner */}
