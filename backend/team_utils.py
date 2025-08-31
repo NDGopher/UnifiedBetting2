@@ -88,14 +88,14 @@ def normalize_team_name_for_matching(name):
 
     # Remove country/competition suffixes if not the whole name
     suffix_patterns = [
-        r'\s*usa$', r'\s*u21$', r'\s*u19$', r'\s*uefa.*$', r'uefa.*$', r'\s*fifa.*$', r'fifa.*$', r'\s*euro.*$', r'euro.*$', r'\s*afc.*$', r'afc.*$', r'\s*concacaf.*$', r'concacaf.*$', r'\s*conmebol.*$', r'conmebol.*$', r'\s*olympics.*$', r'olympics.*$', r'\s*championship.*$', r'championship.*$', r'\s*cup.*$', r'cup.*$', r'\s*league.*$', r'league.*$', r'\s*mls$', r'mls$', r'\s*england$', r'england$', r'\s*scotland$', r'scotland$', r'\s*france$', r'france$', r'\s*spain$', r'spain$', r'\s*italy$', r'italy$', r'\s*germany$', r'germany$', r'\s*netherlands$', r'netherlands$', r'\s*portugal$', r'portugal$', r'\s*denmark$', r'denmark$', r'\s*sweden$', r'sweden$', r'\s*norway$', r'norway$', r'\s*switzerland$', r'switzerland$', r'\s*belgium$', r'belgium$', r'\s*austria$', r'austria$', r'\s*poland$', r'poland$', r'\s*croatia$', r'croatia$', r'\s*serbia$', r'serbia$', r'\s*romania$', r'romania$', r'\s*bulgaria$', r'bulgaria$', r'\s*slovakia$', r'slovakia$', r'\s*slovenia$', r'slovenia$', r'\s*hungary$', r'hungary$', r'\s*czech republic$', r'czech republic$', r'\s*russia$', r'russia$', r'\s*ukraine$', r'ukraine$', r'\s*turkey$', r'turkey$', r'\s*greece$', r'greece$', r'\s*ireland$', r'ireland$', r'\s*wales$', r'wales$', r'\s*northern ireland$', r'northern ireland$', r'\s*iceland$', r'iceland$'
+        r'\s*usa$', r'\s*u21$', r'\s*u19$', r'\s*uefa.*$', r'uefa.*$', r'\s*fifa.*$', r'fifa.*$', r'\s*euro.*$', r'euro.*$', r'\s*afc.*$', r'afc.*$', r'\s*concacaf.*$', r'concacaf.*$', r'\s*conmebol.*$', r'conmebol.*$', r'\s*olympics.*$', r'olympics.*$', r'\s*championship.*$', r'championship.*$', r'\s*cup.*$', r'cup.*$', r'\s*league.*$', r'league.*$', r'\s*mls$', r'mls$', r'\s*ncaa$', r'ncaa$', r'\s*england$', r'england$', r'\s*scotland$', r'scotland$', r'\s*france$', r'france$', r'\s*spain$', r'spain$', r'\s*italy$', r'italy$', r'\s*germany$', r'germany$', r'\s*netherlands$', r'netherlands$', r'\s*portugal$', r'portugal$', r'\s*denmark$', r'denmark$', r'\s*sweden$', r'sweden$', r'\s*norway$', r'norway$', r'\s*switzerland$', r'switzerland$', r'\s*belgium$', r'belgium$', r'\s*austria$', r'austria$', r'\s*poland$', r'poland$', r'\s*croatia$', r'croatia$', r'\s*serbia$', r'serbia$', r'\s*romania$', r'romania$', r'\s*bulgaria$', r'bulgaria$', r'\s*slovakia$', r'slovakia$', r'\s*slovenia$', r'slovenia$', r'\s*hungary$', r'hungary$', r'\s*czech republic$', r'czech republic$', r'\s*russia$', r'russia$', r'\s*ukraine$', r'ukraine$', r'\s*turkey$', r'turkey$', r'\s*greece$', r'greece$', r'\s*ireland$', r'ireland$', r'\s*wales$', r'wales$', r'\s*northern ireland$', r'northern ireland$', r'\s*iceland$', r'iceland$'
     ]
     for pattern in suffix_patterns:
         if norm_name != pattern.strip('\\s*$'):
             norm_name = re.sub(pattern, '', norm_name, flags=re.IGNORECASE).strip()
 
     league_country_suffixes = [
-        'mlb', 'nba', 'nfl', 'nhl', 'ncaaf', 'ncaab', 'wnba',
+        'mlb', 'nba', 'nfl', 'nhl', 'ncaaf', 'ncaab', 'wnba', 'ncaa',
         'poland', 'bulgaria', 'uruguay', 'colombia', 'peru', 'argentina',
         'sweden', 'romania', 'finland', 'england', 'japan', 'austria',
         'liga 1', 'serie a', 'bundesliga', 'la liga', 'ligue 1', 'premier league',
