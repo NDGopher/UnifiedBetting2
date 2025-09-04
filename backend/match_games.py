@@ -297,6 +297,7 @@ def match_pinnacle_to_betbck(pinnacle_events: List[Dict[str, Any]], betbck_data:
                 "pinnacle_event_id": best_match["event_id"],
                 "pinnacle_home_team": best_match["home_team"],
                 "pinnacle_away_team": best_match["away_team"],
+                "sport_name": best_match.get("sport_name", "Unknown"),
                 "betbck_game": betbck_game,
                 "match_confidence": best_score / 100.0,
                 "betbck_home_team": betbck_home_raw,

@@ -15,6 +15,7 @@ import BuckeyeScraper from './components/BuckeyeScraper';
 import BetBCKStatusPopup from './components/BetBCKStatusPopup';
 import MobileLayout from './components/MobileLayout';
 import AutoBetPlacer from './components/AutoBetPlacer';
+import WongTeaserAnalyzer from './components/WongTeaserAnalyzer';
 
 
 // Modern dark theme inspired by Onlook
@@ -355,7 +356,11 @@ function App() {
                   <BuckeyeScraper />
                 </Paper>
               </Grid>
-
+              
+              {/* Wong Teaser Analyzer Section */}
+              <Grid item xs={12}>
+                <WongTeaserAnalyzer />
+              </Grid>
               
               {/* Auto Bet Placer Section */}
               <Grid item xs={12}>

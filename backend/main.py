@@ -31,6 +31,7 @@ from betbck_request_manager import betbck_manager
 from ace_scraper import AceScraper
 from database_models import get_session, HighEVAlert
 from config import setup_logging
+from wong_teaser_scraper import WongTeaserBetBCKScraper
 
 # Setup proper logging configuration (suppresses Selenium spam)
 setup_logging()
@@ -1919,6 +1920,53 @@ async def get_bet_status(bet_id: str):
         return {
             'success': False,
             'message': f'Error retrieving bet status: {str(e)}'
+        }
+
+# Wong Teaser Analysis Endpoint
+@app.post("/api/wong-teaser/analyze")
+async def analyze_wong_teasers():
+    """Analyze NFL games for Wong teaser opportunities using BetBCK odds"""
+    try:
+        logger.info("🚀 Starting Wong teaser analysis...")
+        logger.info(f"📁 Current working directory: {os.getcwd()}")
+        logger.info(f"🐍 Python executable: {sys.executable}")
+        logger.info(f"📦 Python path: {sys.path[:3]}...")
+        
+        # Initialize scraper
+        logger.info("🔧 Creating WongTeaserBetBCKScraper instance...")
+        scraper = WongTeaserBetBCKScraper()
+        
+        # Analyze Wong teasers
+        logger.info("📊 Running analyze_wong_teasers()...")
+        results = scraper.analyze_wong_teasers()
+        
+        logger.info(f"✅ Wong teaser analysis completed: {results['message']}")
+        logger.info(f"📊 Games found: {len(results.get('games', []))}")
+        logger.info(f"📊 Recommendations found: {len(results.get('recommendations', []))}")
+        
+        return {
+            'success': results['success'],
+            'message': results['message'],
+            'data': {
+                'games': results.get('games', []),
+                'recommendations': results.get('recommendations', []),
+                'summary': results.get('summary', {})
+            },
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in Wong teaser analysis: {e}")
+        logger.error(traceback.format_exc())
+        return {
+            'success': False,
+            'message': f'Error analyzing Wong teasers: {str(e)}',
+            'data': {
+                'games': [],
+                'recommendations': [],
+                'summary': {}
+            },
+            'timestamp': datetime.now().isoformat()
         }
 
 # Global exception handler to prevent crashes

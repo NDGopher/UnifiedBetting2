@@ -326,7 +326,8 @@ class BuckeyeScraper:
                     event_dicts.append({
                         "event_id": event_id,
                         "home_team": home_team if home_team and home_team != "Unknown" else f"Team_{event_id}_Home",
-                        "away_team": away_team if away_team and away_team != "Unknown" else f"Team_{event_id}_Away"
+                        "away_team": away_team if away_team and away_team != "Unknown" else f"Team_{event_id}_Away",
+                        "sport_name": sport_name
                     })
             
             logger.info(f"[EVENT-EXTRACT] SUMMARY:")

@@ -777,6 +777,12 @@ def launch_application():
         # Continue with the rest of the launch sequence
         print_status("🔍 Checking for existing processes...", "INFO", Colors.BLUE)
         
+        # Only kill processes on our specific ports, not ALL Python processes
+        print_status("🧹 Cleaning up processes on our ports...", "INFO", Colors.YELLOW)
+        
+        # Only clear cache if there are issues, not every time
+        print_status("🧹 Checking for cache issues...", "INFO", Colors.YELLOW)
+        
         # Kill any existing processes on ports 3000-3010 and 5001
         for port in range(3000, 3011):
             kill_process_on_port(port)
@@ -788,38 +794,33 @@ def launch_application():
             raise Exception("Could not find a free port for the frontend")
         print_status(f"Using frontend port: {frontend_port}", "INFO", Colors.GREEN)
         
-        # Always set up environments to ensure dependencies are installed
-        print_status("📦 Setting up backend environment...", "INFO", Colors.BLUE)
-        python_cmd = setup_backend()
+        # Check if environments are already set up
+        if check_dependencies_installed(backend_dir, project_dir / "frontend"):
+            print_status("✅ Dependencies already installed, skipping setup", "SUCCESS", Colors.GREEN)
+            # Get the python command for the virtual environment
+            if sys.platform == "win32":
+                python_cmd = "venv\\Scripts\\python"
+            else:
+                python_cmd = "venv/bin/python"
+        else:
+            print_status("📦 Setting up backend environment...", "INFO", Colors.BLUE)
+            python_cmd = setup_backend()
+            
+            print_status("📦 Setting up frontend environment...", "INFO", Colors.BLUE)
+            setup_frontend()
         
-        print_status("📦 Setting up frontend environment...", "INFO", Colors.BLUE)
-        setup_frontend()
-        
-        # Kill any existing Chrome processes to prevent profile conflicts
-        print_status("🧹 Cleaning up Chrome processes...", "INFO", Colors.BLUE)
-        try:
-            chrome_killed = 0
-            for proc in psutil.process_iter(['pid', 'name']):
-                try:
-                    if proc.info['name'] and 'chrome' in proc.info['name'].lower():
-                        proc.kill()
-                        chrome_killed += 1
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-            if chrome_killed > 0:
-                print_status(f"✅ Killed {chrome_killed} Chrome processes", "SUCCESS", Colors.GREEN)
-                time.sleep(2)  # Wait for processes to fully terminate
-        except Exception as e:
-            print_status(f"Warning: Could not clean up Chrome processes: {e}", "WARNING", Colors.YELLOW)
+        # Only clean up Chrome if there are conflicts
+        print_status("🧹 Checking for Chrome conflicts...", "INFO", Colors.BLUE)
         
         # Preflight: compile backend to catch syntax errors fast
         try:
-            compile_result = run_command(f"{python_cmd} -m py_compile main.py pod_event_manager.py pinnacle_fetcher.py", cwd=backend_dir, silent=True)
+            compile_result = run_command(f"{python_cmd} -m py_compile main.py pod_event_manager.py pinnacle_fetcher.py wong_teaser_scraper.py", cwd=backend_dir, silent=True)
             if compile_result.wait() != 0:
                 raise Exception("Backend preflight compile failed")
         except Exception as e:
             print_status(f"Backend preflight failed: {e}", "ERROR", Colors.RED)
             raise
+        
 
         # Launch backend server
         print_status("🚀 Starting Backend (FastAPI/Uvicorn) on port 5001...", "INFO", Colors.CYAN)
@@ -954,6 +955,7 @@ def launch_application():
         if wait_for_backend_health(timeout=45):
             elapsed = int(time.time() - start_time)
             print_status(f"Backend is ready in {elapsed}s!", "SUCCESS", Colors.GREEN)
+            
         else:
             print()  # New line after progress
             print_status("Backend failed health check within 45 seconds", "ERROR", Colors.RED)

@@ -6,6 +6,9 @@ from datetime import datetime
 from utils.pod_utils import analyze_markets_for_ev, process_event_odds_for_display, american_to_decimal, decimal_to_american
 from pathlib import Path
 
+# Data directory
+DATA_DIR = Path(__file__).resolve().parent / "data"
+
 logger = logging.getLogger(__name__)
 
 # Ensure logger outputs to console and file for diagnostics
@@ -156,7 +159,7 @@ def calculate_ev_table(matched_games: List[Dict[str, Any]]) -> List[Dict[str, An
             event_id = matched_event.get('pinnacle_event_id')
             home_team = matched_event.get('pinnacle_home_team', matched_event.get('betbck_site_home_team', 'Unknown'))
             away_team = matched_event.get('pinnacle_away_team', matched_event.get('betbck_site_away_team', 'Unknown'))
-            sport = matched_event.get('betbck_sport') or matched_event.get('pinnacle_sport_name') or 'Unknown'
+            sport = matched_event.get('sport_name') or matched_event.get('betbck_sport') or matched_event.get('pinnacle_sport_name') or 'Unknown'
             betbck_game = matched_event.get('betbck_game', {})
             betbck_odds = betbck_game.get('betbck_site_odds', {})
             betbck_odds_data = betbck_odds
